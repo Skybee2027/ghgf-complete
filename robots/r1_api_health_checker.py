@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GHGF API Checker - Simplified 10-Service Test
+GHGF API Checker - Universal API Connectivity Test
 Tests: Groq, Google, OpenAI, Cohere, Replicate, HuggingFace, Unsplash, Pixabay, CJ Affiliate, ShareASale
 """
 
@@ -50,8 +50,20 @@ class APIChecker:
             self.results['groq'] = True
             self.working += 1
         except Exception as e:
-            print(f"❌ Groq                      ✗          [TEXT] {str(e)[:50]}")
-            self.results['groq'] = False
+            error_msg = str(e)[:50]
+            # Try alternative models if primary fails
+            try:
+                response = client.chat.completions.create(
+                    model="llama2-70b",
+                    messages=[{"role": "user", "content": "Say OK"}],
+                    max_tokens=5
+                )
+                print(f"✅ Groq (alternative model)  ✓          [TEXT] Connected")
+                self.results['groq'] = True
+                self.working += 1
+            except:
+                print(f"❌ Groq                      ✗          [TEXT] {error_msg}")
+                self.results['groq'] = False
         self.total += 1
 
     def check_google(self):
@@ -65,11 +77,23 @@ class APIChecker:
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content("Say OK")
-            print(f"✅ Google Gemini             ✓          [TEXT] Connected")
-            self.results['google'] = True
-            self.working += 1
+            # Try multiple model options
+            models_to_try = ['gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash']
+            success = False
+            for model_name in models_to_try:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content("Say OK")
+                    print(f"✅ Google Gemini             ✓          [TEXT] Connected")
+                    self.results['google'] = True
+                    self.working += 1
+                    success = True
+                    break
+                except:
+                    continue
+            if not success:
+                print(f"❌ Google Gemini             ✗          [TEXT] No compatible models")
+                self.results['google'] = False
         except Exception as e:
             print(f"❌ Google Gemini             ✗          [TEXT] {str(e)[:50]}")
             self.results['google'] = False
