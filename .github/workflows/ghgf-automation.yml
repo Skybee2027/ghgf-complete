@@ -2,12 +2,13 @@ name: GHGF Automation
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # Every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+  workflow_dispatch:  # Manual trigger from Actions tab
 
 jobs:
   run_robots:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # 1 hour max per workflow run
 
     env:
       # Database Connection
@@ -48,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Set up Python 3.9
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
@@ -56,18 +57,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-36robots-updated.txt
 
-      - name: Run R0 WordPress Post Importer
-        run: python robots/r0_wordpress_post_importer.py
-        continue-on-error: true
-
       - name: Run R1 API Health Checker
         run: python robots/r1_api_health_checker.py
         continue-on-error: true
 
-      - name: Run R14b Digital Product Creator
-        run: python robots/r14b_digital_product_creator.py
+      - name: Run Full Pipeline (R2→R36)
+        run: python run_full_pipeline.py
+        continue-on-error: false
+
+      - name: Run Support Robots
+        run: |
+          echo "Running support robots..."
+          python robots/r0_wordpress_post_importer.py || true
+          python robots/r14b_digital_product_creator.py || true
+          python robots/r37_content_retrofit_engine.py || true
         continue-on-error: true
 
-      - name: Run R37 Content Retrofit Engine
-        run: python robots/r37_content_retrofit_engine.py
-        continue-on-error: true
+      - name: Workflow Complete
+        if: always()
+        run: echo "✅ GHGF Automation workflow completed at $(date)"
