@@ -56,6 +56,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-36robots-updated.txt
 
+      - name: Run R0 WordPress Post Importer
+        run: python robots/r0_wordpress_post_importer.py
+        continue-on-error: true
+
       - name: Run R1 API Health Checker
         run: python robots/r1_api_health_checker.py
         continue-on-error: true
