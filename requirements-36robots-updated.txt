@@ -31,11 +31,7 @@ markdown>=3.5.0
 pandas>=1.5.0
 numpy>=1.24.0
 
-# Affiliate APIs
-requests>=2.28.0
-
-# Image APIs - Using Alpha for Unsplash (Only Available Version)
-unsplash==1.0.0a2
+# Image APIs
 pixabay>=1.0.0
 
 # Payment Processing
