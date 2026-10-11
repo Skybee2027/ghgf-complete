@@ -68,17 +68,16 @@ class DigitalProductCreator:
             self.connection.close()
     
     def get_eligible_posts(self):
-        """Get posts eligible for digital products (800+ words, quality 7.5+)"""
+        """Get posts eligible for digital products (800+ words)"""
         try:
             cursor = self.connection.cursor(dictionary=True)
             
-            # FIXED: Removed 'pc.name' reference - just check word_count
+            # FIXED: Removed problematic NOT IN subquery
             query = """
                 SELECT id, title, content, word_count 
                 FROM blog_posts 
                 WHERE word_count >= 800 
                   AND status = 'published'
-                  AND id NOT IN (SELECT post_id FROM digital_products)
                 LIMIT 20
             """
             
@@ -169,7 +168,7 @@ class DigitalProductCreator:
                 f"E-book: {post_title}",
                 product_url,
                 price,
-                None  # WooCommerce ID will be set by integration
+                None
             ))
             
             cursor.close()
