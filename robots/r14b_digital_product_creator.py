@@ -157,9 +157,10 @@ class DigitalProductCreator:
         try:
             cursor = self.connection.cursor()
 
+            # FIXED: Updated column names to match actual table schema
             insert_query = """
                 INSERT INTO digital_products
-                (post_id, product_name, product_url, price, woocommerce_product_id, created_date)
+                (blog_id, product_name, pdf_url, price, woocommerce_product_id, created_at)
                 VALUES (%s, %s, %s, %s, %s, NOW())
             """
 
