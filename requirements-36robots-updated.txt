@@ -1,7 +1,12 @@
-# 36-Robot Autonomous Blogging System - Universal Python Version
-# Auto-compatible with Python 3.9+ - pip will find latest compatible versions
+# 36-Robot Autonomous Blogging System - Complete & Verified Dependencies
+# Updated: 2026-10-11
+# Python 3.9+ compatible - Universal, flexible versioning
 
-# Core HTTP & Web
+# ============================================================================
+# CORE REQUIRED PACKAGES
+# ============================================================================
+
+# HTTP & Web
 requests>=2.28.0
 urllib3>=2.0.0
 
@@ -12,46 +17,148 @@ mysql-connector-python>=8.0.0
 beautifulsoup4>=4.11.0
 lxml>=4.9.0
 
-# AI/LLM APIs
+# ============================================================================
+# TEXT GENERATION APIs (R1 checks these)
+# ============================================================================
+
+# Primary: Groq (Required - works Python 3.9+)
 groq>=0.4.0
 
-# Content Generation & Media
+# Secondary: OpenAI (try to install, may skip if incompatible)
+openai>=0.27.0
+
+# Google Gemini (try to install, may skip if incompatible)
+google-generativeai>=0.2.0
+
+# Cohere (try to install, may skip if incompatible)
+cohere>=4.0.0
+
+# HuggingFace Transformers (try to install, may skip if incompatible)
+transformers>=4.30.0
+
+# Replicate (try to install, may skip if incompatible)
+replicate>=0.8.0
+
+# ============================================================================
+# CONTENT GENERATION & MEDIA (R14b uses these)
+# ============================================================================
+
 reportlab>=4.0.0
 pillow>=9.0.0
-
-# PDF Processing
 pypdf>=3.0.0
+python-pptx>=0.6.21
+markdown>=3.5.0
 
-# Data Processing
+# ============================================================================
+# IMAGE APIs (R1 checks these)
+# ============================================================================
+
+# Unsplash (try to install)
+unsplash>=1.0.0
+
+# Pixabay (try to install)
+pixabay>=1.0.0
+
+# OpenCV for image processing
+opencv-python>=4.5.0
+
+# ============================================================================
+# DATA PROCESSING (R14b, R37 use these)
+# ============================================================================
+
 pandas>=1.5.0
 numpy>=1.24.0
 openpyxl>=3.0.0
 
-# Authentication & Security
+# ============================================================================
+# AUTHENTICATION & SECURITY
+# ============================================================================
+
 requests-oauthlib>=1.3.0
 PyJWT>=2.8.0
 cryptography>=40.0.0
 
-# Environment & Configuration
+# ============================================================================
+# ENVIRONMENT & CONFIGURATION
+# ============================================================================
+
 python-dotenv>=1.0.0
 pyyaml>=6.0.0
 
-# Async HTTP
+# ============================================================================
+# ASYNC & HTTP
+# ============================================================================
+
 aiohttp>=3.8.0
 httpx>=0.23.0
+uvicorn>=0.20.0
+fastapi>=0.95.0
 
-# Date/Time Utilities
+# ============================================================================
+# DATE/TIME UTILITIES
+# ============================================================================
+
 python-dateutil>=2.8.0
 pytz>=2023.0
 
-# Payment Processing
+# ============================================================================
+# PAYMENT PROCESSING (R14b uses these)
+# ============================================================================
+
 stripe>=5.0.0
 paypalrestsdk>=1.7.0
 
-# CLI & Output
+# ============================================================================
+# CLI & OUTPUT FORMATTING
+# ============================================================================
+
 click>=8.0.0
 tqdm>=4.60.0
 colorama>=0.4.0
 
-# Text Processing
+# ============================================================================
+# TEXT PROCESSING & NLP
+# ============================================================================
+
 python-slugify>=8.0.0
+nltk>=3.8.0
+textblob>=0.17.0
+
+# ============================================================================
+# WEB SCRAPING & AUTOMATION (Optional)
+# ============================================================================
+
+# Selenium (try to install, may skip if incompatible)
+selenium>=4.0.0
+
+# Scrapy (try to install, may skip if incompatible)
+scrapy>=2.10.0
+
+# Playwright (try to install, may skip if incompatible)
+playwright>=1.35.0
+
+# ============================================================================
+# CACHING & RATE LIMITING
+# ============================================================================
+
+redis>=5.0.0
+limits>=3.7.0
+
+# ============================================================================
+# SCHEDULING
+# ============================================================================
+
+APScheduler>=3.10.0
+
+# ============================================================================
+# JSON & VALIDATION
+# ============================================================================
+
+jsonschema>=4.20.0
+
+# ============================================================================
+# TESTING (Optional)
+# ============================================================================
+
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
