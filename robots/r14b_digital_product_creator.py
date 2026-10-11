@@ -55,7 +55,20 @@ class DigitalProductCreator:
 
         # API Keys
         self.groq_api_key = os.getenv('GROQ_API_KEY', '')
-        self.groq_client = Groq(api_key=self.groq_api_key)
+
+        # *** CHANGE #1: Fixed Groq client initialization with error handling ***
+        try:
+            self.groq_client = Groq(api_key=self.groq_api_key)
+        except TypeError as e:
+            # Handle version compatibility - use simpler initialization
+            if 'proxies' in str(e):
+                import httpx
+                self.groq_client = Groq(
+                    api_key=self.groq_api_key,
+                    http_client=httpx.Client()
+                )
+            else:
+                raise
 
         # WooCommerce credentials
         self.wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
