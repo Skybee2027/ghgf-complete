@@ -224,12 +224,12 @@ class ContentRetrofitEngine:
                 else:
                     logger.info(f"  [{idx}/{len(posts)}] {post_title[:40]}... → No changes")
 
-                # Record in retrofit log
+                # Record in retrofit log - FIXED: Updated column names
                 cursor = self.connection.cursor()
                 cursor.execute("""
-                    INSERT INTO retrofit_log (post_id, status, details, processed_date)
-                    VALUES (%s, 'completed', %s, NOW())
-                """, (post_id, json.dumps({'enhanced': True})))
+                    INSERT INTO retrofit_log (blog_id, status, details, completed_at)
+                    VALUES (%s, %s, %s, NOW())
+                """, (post_id, 'completed', json.dumps({'enhanced': True})))
                 cursor.close()
 
                 self.posts_processed += 1
