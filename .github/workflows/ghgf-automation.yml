@@ -8,18 +8,62 @@ on:
 jobs:
   run_robots:
     runs-on: ubuntu-latest
-    
+
+    env:
+      # Database Connection
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      # WordPress Integration
+      WORDPRESS_SITE_URL: ${{ secrets.WORDPRESS_SITE_URL }}
+      WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
+      # Text Generation APIs
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
+      REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
+
+      # Image APIs
+      UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+
+      # Affiliate APIs
+      CJ_AFFILIATE_API: ${{ secrets.CJ_AFFILIATE_API }}
+      CJ_API_KEY: ${{ secrets.CJ_API_KEY }}
+      SHAREASALE_API: ${{ secrets.SHAREASALE_API }}
+      SHAREASALE_API_TOKEN: ${{ secrets.SHAREASALE_API_TOKEN }}
+      SHAREASALE_USER_ID: ${{ secrets.SHAREASALE_USER_ID }}
+
+      # Payment Processing
+      PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
+      PAYPAL_SECRET: ${{ secrets.PAYPAL_SECRET }}
+      STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
       - name: Install dependencies
         run: pip install -r requirements-36robots-updated.txt
+
       - name: Run R1 API Health Checker
         run: python robots/r1_api_health_checker.py
+        continue-on-error: true
+
       - name: Run R14b Digital Product Creator
         run: python robots/r14b_digital_product_creator.py
+        continue-on-error: true
+
       - name: Run R37 Content Retrofit Engine
         run: python robots/r37_content_retrofit_engine.py
+        continue-on-error: true
