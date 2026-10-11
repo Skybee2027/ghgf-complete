@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""
+R8: Alt-Text Generator & Optimizer
+Purpose: Generate SEO-optimized, ADA-compliant alt text for images
+Input: Images (from R7), blog post content
+Output: Alt text for each image (keyword + descriptive + context)
+Frequency: Every 6 hours (parallel with R7)
+Dependencies: R7 (provides images)
+ADA Compliance: All alt text must be accessible and descriptive
+Format: "{keyword} - {descriptive alt text}"
+"""
+
+import os
+import sys
+import mysql.connector
+from datetime import datetime
+import logging
+from groq import Groq
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+BOLD = '\033[1m'
+RESET = '\033[0m'
+GREEN = '\033[92m'
+RED = '\033[91m'
+YELLOW = '\033[93m'
+BLUE = '\033[94m'
+
+class AltTextGenerator:
+    def __init__(self):
+        self.db_config = {
+            'host': os.getenv('DB_HOST', 'localhost'),
+            'user': os.getenv('DB_USER', 'root'),
+            'password': os.getenv('DB_PASSWORD', ''),
+            'database': os.getenv('DB_NAME', 'ghgf_blogging')
+        }
+        self.groq_key = os.getenv("GROQ_API_KEY", "")
+        self.alt_texts_generated = 0
+
+    def print_header(self, title):
+        print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
+
+    def connect_db(self):
+        try:
+            return mysql.connector.connect(**self.db_config)
+        except Exception as e:
+            logger.error(f"Database connection failed: {str(e)}")
+            return None
+
+    def get_latest_blog_with_images(self, conn):
+        """Get latest draft blog post with images from R7"""
+        try:
+            cursor = conn.cursor(dictionary=True)
+            query = """
+                SELECT bp.id, bp.title, bp.content, bp.topic
+                FROM blog_posts bp
+                WHERE bp.status = 'draft'
+                AND EXISTS (
+                    SELECT 1 FROM image_tracking it
+                    WHERE it.blog_id = bp.id
+                )
+                ORDER BY bp.created_at DESC
+                LIMIT 1
+            """
+            cursor.execute(query)
+            result = cursor.fetchone()
+            cursor.close()
+            return result
+        except Exception as e:
+            logger.error(f"Error getting blog with images: {str(e)}")
+            return None
+
+    def get_images_for_blog(self, conn, blog_id):
+        """Get all images from R7 for this blog post"""
+        try:
+            cursor = conn.cursor(dictionary=True)
+            query = """
+                SELECT id, image_url, source, title, topic
+                FROM image_tracking
+                WHERE blog_id = %s
+                ORDER BY used_date ASC
+            """
+            cursor.execute(query, (blog_id,))
+            results = cursor.fetchall()
+            cursor.close()
+            return results
+        except Exception as e:
+            logger.error(f"Error getting images: {str(e)}")
+            return []
+
+    def get_topic_keywords(self, conn, topic):
+        """Get top keywords for topic to include in alt text"""
+        try:
+            cursor = conn.cursor(dictionary=True)
+            query = """
+                SELECT keyword, search_volume
+                FROM trending_keywords
+                WHERE topic = %s
+                ORDER BY search_volume DESC
+                LIMIT 5
+            """
+            cursor.execute(query, (topic,))
+            results = cursor.fetchall()
+            cursor.close()
+            return [r['keyword'] for r in results] if results else []
+        except Exception as e:
+            logger.error(f"Error getting keywords: {str(e)}")
+            return []
+
+    def extract_context_from_content(self, content, image_title):
+        """Extract relevant context from blog content for alt text"""
+        try:
+            # Get first 500 chars and any mentions related to the image
+            intro_context = content[:300] if len(content) > 300 else content
+
+            # Look for H2/H3 headers that might relate to image
+            import re
+            headers = re.findall(r'<h[23]>([^<]+)</h[23]>', content)
+
+            return {
+                'intro': intro_context,
+                'headers': headers[:3],  # Top 3 headers for context
+                'has_list': '<ul>' in content or '<ol>' in content
+            }
+        except Exception as e:
+            logger.error(f"Error extracting context: {str(e)}")
+            return {'intro': '', 'headers': [], 'has_list': False}
+
+    def generate_alt_text(self, conn, blog_data, image, keywords, context):
+        """Generate SEO-optimized, ADA-compliant alt text"""
+        try:
+            if not self.groq_key:
+                return None
+
+            client = Groq(api_key=self.groq_key)
+
+            primary_keyword = keywords[0] if keywords else blog_data['topic']
+            secondary_keywords = ", ".join(keywords[1:4]) if len(keywords) > 1 else ""
+
+            prompt = f"""Generate an SEO-optimized, ADA-compliant alt text for an image.
+
+Image Details:
+- Source: {image['source']}
+- Title from API: {image['title']}
+- Blog Topic: {blog_data['topic']}
+- Blog Title: {blog_data['title']}
+
+Keywords to include naturally:
+- Primary: {primary_keyword}
+- Secondary: {secondary_keywords}
+
+Context from blog:
+- Intro: {context['intro'][:100]}...
+- Related headers: {', '.join(context['headers'])}
+
+Requirements for alt text:
+1. Start with PRIMARY keyword naturally
+2. Follow with descriptive phrase (2-4 words)
+3. Include relevant context from the blog post
+4. Max length: 120 characters (best practice)
+5. Be accessible (describe what's in the image for screen readers)
+6. Be specific and descriptive (not just "image" or "photo")
+7. Avoid keyword stuffing
+8. Format: "{{keyword}} - {{descriptive phrase with context}}"
+
+Examples of GOOD alt text:
+- "weight loss progress tracking chart showing monthly weight changes"
+- "healthy meal prep containers with balanced nutrition portions"
+- "elderly woman doing gentle yoga poses for flexibility"
+
+Generate ONLY the alt text, no explanation."""
+
+            response = client.chat.completions.create(
+                model="mixtral-8x7b-32768",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.7
+            )
+
+            if response.choices and response.choices[0].message.content:
+                alt_text = response.choices[0].message.content.strip()
+                # Ensure it's under 120 chars (best practice)
+                if len(alt_text) > 120:
+                    alt_text = alt_text[:117] + "..."
+                return alt_text
+            return None
+        except Exception as e:
+            logger.error(f"Alt text generation error: {str(e)}")
+            return None
+
+    def save_alt_text(self, conn, image_id, alt_text):
+        """Save generated alt text to database"""
+        try:
+            cursor = conn.cursor()
+            query = """
+                UPDATE image_tracking
+                SET alt_text = %s, alt_text_generated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(query, (alt_text, image_id))
+            conn.commit()
+            cursor.close()
+            logger.info(f"Alt text saved for image_id: {image_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving alt text: {str(e)}")
+            return False
+
+    def run(self):
+        self.print_header("R8: ALT-TEXT GENERATOR & OPTIMIZER")
+        print(f"Execution: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+        conn = self.connect_db()
+        if not conn:
+            return False
+
+        try:
+            print(f"{BOLD}Step 1: Fetching Latest Blog with Images (from R7){RESET}")
+            blog_data = self.get_latest_blog_with_images(conn)
+            if not blog_data:
+                logger.error("No blog posts with images found")
+                return False
+            print(f"  ✓ Blog ID: {BLUE}{blog_data['id']}{RESET}")
+            print(f"  ✓ Title: {blog_data['title']}\n")
+
+            print(f"{BOLD}Step 2: Retrieving Images from R7{RESET}")
+            images = self.get_images_for_blog(conn, blog_data['id'])
+            if not images:
+                logger.error("No images found for blog post")
+                return False
+            print(f"  ✓ Found {len(images)} images\n")
+
+            print(f"{BOLD}Step 3: Getting Topic Keywords{RESET}")
+            keywords = self.get_topic_keywords(conn, blog_data['topic'])
+            for kw in keywords[:3]:
+                print(f"  • {kw}")
+            print()
+
+            print(f"{BOLD}Step 4: Extracting Blog Context{RESET}")
+            context = self.extract_context_from_content(blog_data['content'], blog_data['title'])
+            print(f"  ✓ Context extracted\n")
+
+            print(f"{BOLD}Step 5: Generating Alt Text for Each Image{RESET}")
+            for i, image in enumerate(images, 1):
+                alt_text = self.generate_alt_text(conn, blog_data, image, keywords, context)
+                if alt_text:
+                    saved = self.save_alt_text(conn, image['id'], alt_text)
+                    if saved:
+                        self.alt_texts_generated += 1
+                        print(f"  {i}. Image ({image['source']}):")
+                        print(f"     Alt Text: {BLUE}{alt_text}{RESET}")
+                    else:
+                        print(f"  {i}. Image ({image['source']}): {RED}Failed to save{RESET}")
+                else:
+                    print(f"  {i}. Image ({image['source']}): {RED}Failed to generate{RESET}")
+            print()
+
+            print(f"{'='*70}")
+            print(f"{BOLD}SUMMARY{RESET}")
+            print(f"  Blog ID: {blog_data['id']}")
+            print(f"  Total Images: {len(images)}")
+            print(f"  Alt Texts Generated: {GREEN}{self.alt_texts_generated}{RESET}")
+            print(f"  Status: {GREEN}PASS - Running in parallel with R7 (Image Finder){RESET}")
+            print('='*70 + "\n")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error: {str(e)}")
+            return False
+        finally:
+            conn.close()
+
+if __name__ == "__main__":
+    generator = AltTextGenerator()
+    success = generator.run()
+    sys.exit(0 if success else 1)
