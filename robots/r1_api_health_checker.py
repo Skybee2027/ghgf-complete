@@ -212,7 +212,7 @@ class APIChecker:
         self.total += 1
 
     def check_cj_affiliate(self):
-        api_key = os.getenv("CJ_AFFILIATE_API_KEY")
+        api_key = os.getenv("CJ_AFFILIATE_API")
         if not api_key:
             print("❌ CJ Affiliate              ✗          [AFFILIATE] No API key")
             self.results['cj'] = False
@@ -240,7 +240,7 @@ class APIChecker:
         self.total += 1
 
     def check_shareasale(self):
-        token = os.getenv("SHAREASALE_TOKEN")
+        token = os.getenv("SHAREASALE_API_TOKEN")
         user_id = os.getenv("SHAREASALE_USER_ID")
         if not token or not user_id:
             print("❌ ShareASale                ✗          [AFFILIATE] Missing credentials")
