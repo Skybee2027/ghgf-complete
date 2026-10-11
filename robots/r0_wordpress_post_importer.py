@@ -1,51 +1,69 @@
 #!/usr/bin/env python3
 """
-R0: WordPress Post Importer
-Purpose: Fetch existing posts from WordPress and import into MySQL database
-Input: WordPress REST API
-Output: Populated blog_posts table in MySQL
+R0 - WordPress Post Importer
+Imports all posts from WordPress REST API into MySQL database
+Must run FIRST before R1, R14b, and R37
 """
 
 import os
 import sys
-import mysql.connector
-from datetime import datetime
 import logging
 import requests
 import json
+from datetime import datetime
+import mysql.connector
+from mysql.connector import Error
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-BOLD = '\033[1m'
-RESET = '\033[0m'
-GREEN = '\033[92m'
-RED = '\033[91m'
-YELLOW = '\033[93m'
-CYAN = '\033[96m'
-
 class WordPressPostImporter:
+    """Import WordPress posts into MySQL database"""
+    
     def __init__(self):
-        self.db_config = {
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'user': os.getenv('DB_USER', 'root'),
-            'password': os.getenv('DB_PASSWORD', ''),
-            'database': os.getenv('DB_NAME', 'ghgf_blogging')
-        }
-        self.wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
+        """Initialize with environment variables"""
+        self.wordpress_url = os.getenv('WORDPRESS_SITE_URL', '').rstrip('/')
+        self.db_host = os.getenv('DB_HOST', '193.203.166.223')
+        self.db_user = os.getenv('DB_USER', '')
+        self.db_password = os.getenv('DB_PASSWORD', '')
+        self.db_name = os.getenv('DB_NAME', 'u853068512_ghgf_blogging')
+        
+        self.connection = None
         self.posts_imported = 0
+        self.posts_updated = 0
         self.posts_failed = 0
-
-    def print_header(self, title):
-        print(f"\n{'='*80}\n{BOLD}{title}{RESET}\n{'='*80}")
-
-    def connect_db(self):
+        
+        logger.info("WordPress Post Importer initialized")
+        logger.info(f"WordPress URL: {self.wordpress_url}")
+        logger.info(f"Database: {self.db_name}@{self.db_host}")
+    
+    def connect_database(self):
+        """Connect to MySQL database"""
         try:
-            return mysql.connector.connect(**self.db_config)
-        except Exception as e:
-            logger.error(f"Database connection failed: {str(e)}")
-            return None
-
+            self.connection = mysql.connector.connect(
+                host=self.db_host,
+                user=self.db_user,
+                password=self.db_password,
+                database=self.db_name,
+                autocommit=True,
+                connection_timeout=30
+            )
+            logger.info("✓ Database connection successful")
+            return True
+        except Error as e:
+            logger.error(f"✗ Database connection failed: {e}")
+            return False
+    
+    def close_database(self):
+        """Close database connection"""
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
+            logger.info("Database connection closed")
+    
     def fetch_wordpress_posts(self):
         """Fetch all posts from WordPress REST API"""
         try:
@@ -53,118 +71,194 @@ class WordPressPostImporter:
             page = 1
             per_page = 100
             
+            logger.info("Fetching posts from WordPress...")
+            
             while True:
-                url = f"{self.wordpress_url}/wp-json/wp/v2/posts?page={page}&per_page={per_page}"
-                response = requests.get(url, timeout=30)
+                url = f"{self.wordpress_url}/wp-json/wp/v2/posts"
+                params = {
+                    'page': page,
+                    'per_page': per_page,
+                    'status': 'publish',
+                    '_fields': 'id,title,slug,content,excerpt,date,modified'
+                }
                 
-                if response.status_code != 200:
-                    break
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
                 
                 posts = response.json()
                 if not posts:
                     break
                 
                 all_posts.extend(posts)
+                logger.info(f"Fetched page {page}: {len(posts)} posts")
+                
+                # Check if we got less than per_page items (last page)
+                if len(posts) < per_page:
+                    break
+                
                 page += 1
             
-            logger.info(f"Fetched {len(all_posts)} posts from WordPress")
+            logger.info(f"✓ Total posts fetched from WordPress: {len(all_posts)}")
             return all_posts
-        except Exception as e:
-            logger.error(f"Error fetching WordPress posts: {str(e)}")
-            return []
-
-    def import_posts_to_mysql(self, conn, posts):
-        """Import posts into MySQL database"""
-        try:
-            cursor = conn.cursor()
             
+        except requests.RequestException as e:
+            logger.error(f"✗ Failed to fetch WordPress posts: {e}")
+            return []
+    
+    def calculate_word_count(self, content_html):
+        """Calculate word count from HTML content"""
+        try:
+            # Remove HTML tags
+            import re
+            text = re.sub('<[^<]+?>', '', content_html)
+            # Remove extra whitespace and count words
+            words = text.split()
+            return len(words)
+        except Exception as e:
+            logger.warning(f"Failed to calculate word count: {e}")
+            return 0
+    
+    def import_posts(self, posts):
+        """Import posts into MySQL database"""
+        if not posts:
+            logger.warning("No posts to import")
+            return
+        
+        cursor = self.connection.cursor(dictionary=True)
+        
+        try:
             for post in posts:
                 try:
-                    # Extract post data
                     post_id = post.get('id')
                     title = post.get('title', {}).get('rendered', 'Untitled')
-                    slug = post.get('slug', '')
+                    slug = post.get('slug', f'post-{post_id}')
                     content = post.get('content', {}).get('rendered', '')
-                    status = post.get('status', 'draft')
-                    published = post.get('date', datetime.now().isoformat())
-                    
-                    # Calculate word count
-                    word_count = len(content.split()) if content else 0
+                    word_count = self.calculate_word_count(content)
+                    publish_date = post.get('date', datetime.utcnow().isoformat())
                     
                     # Check if post already exists
-                    cursor.execute(
-                        "SELECT id FROM blog_posts WHERE id = %s",
-                        (post_id,)
-                    )
+                    check_query = "SELECT id FROM blog_posts WHERE id = %s"
+                    cursor.execute(check_query, (post_id,))
+                    existing = cursor.fetchone()
                     
-                    if cursor.fetchone():
+                    if existing:
                         # Update existing post
-                        cursor.execute("""
+                        update_query = """
                             UPDATE blog_posts 
                             SET title = %s, slug = %s, content = %s, 
-                                word_count = %s, publish_date = %s, status = %s
+                                word_count = %s, publish_date = %s, status = 'published'
                             WHERE id = %s
-                        """, (title, slug, content, word_count, published, status, post_id))
+                        """
+                        cursor.execute(update_query, (
+                            title, slug, content, word_count, 
+                            publish_date, post_id
+                        ))
+                        self.posts_updated += 1
+                        logger.debug(f"Updated post {post_id}: {title[:50]}")
                     else:
                         # Insert new post
-                        cursor.execute("""
+                        insert_query = """
                             INSERT INTO blog_posts 
-                            (id, title, slug, content, word_count, publish_date, status, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-                        """, (post_id, title, slug, content, word_count, published, status))
-                    
-                    self.posts_imported += 1
+                            (id, title, slug, content, word_count, publish_date, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, 'published')
+                        """
+                        cursor.execute(insert_query, (
+                            post_id, title, slug, content, word_count, publish_date
+                        ))
+                        self.posts_imported += 1
+                        logger.debug(f"Imported post {post_id}: {title[:50]}")
                     
                 except Exception as e:
-                    logger.error(f"Error importing post {post_id}: {str(e)}")
                     self.posts_failed += 1
+                    logger.error(f"Failed to import post {post.get('id')}: {e}")
                     continue
-            
-            conn.commit()
+        
+        finally:
             cursor.close()
-            logger.info(f"Successfully imported {self.posts_imported} posts")
-        except Exception as e:
-            logger.error(f"Error during import: {str(e)}")
-
-    def run(self):
-        self.print_header("R0: WORDPRESS POST IMPORTER")
-        print(f"Execution: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-
-        conn = self.connect_db()
-        if not conn:
-            print(f"{RED}✗ Database connection failed{RESET}")
-            return False
-
+    
+    def get_import_summary(self):
+        """Get summary statistics"""
+        cursor = self.connection.cursor()
         try:
-            print(f"{BOLD}Step 1: Fetching WordPress Posts{RESET}")
+            cursor.execute("SELECT COUNT(*) FROM blog_posts")
+            total_posts = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT SUM(word_count) FROM blog_posts")
+            total_words = cursor.fetchone()[0] or 0
+            
+            return {
+                'total_posts': total_posts,
+                'total_words': total_words,
+                'posts_imported': self.posts_imported,
+                'posts_updated': self.posts_updated,
+                'posts_failed': self.posts_failed
+            }
+        finally:
+            cursor.close()
+    
+    def run(self):
+        """Execute the import process"""
+        logger.info("=" * 60)
+        logger.info("R0 - WordPress Post Importer Starting")
+        logger.info("=" * 60)
+        
+        # Connect to database
+        if not self.connect_database():
+            logger.error("✗ Cannot proceed without database connection")
+            return False
+        
+        try:
+            # Fetch posts from WordPress
             posts = self.fetch_wordpress_posts()
             
             if not posts:
-                print(f"{YELLOW}  No posts found to import{RESET}\n")
-                return True
+                logger.warning("No posts found to import")
+                return False
             
-            print(f"  Found {len(posts)} posts\n")
-
-            print(f"{BOLD}Step 2: Importing Posts to MySQL{RESET}")
-            self.import_posts_to_mysql(conn, posts)
-            print(f"  ✓ Import complete\n")
-
-            print(f"{'='*80}")
-            print(f"{BOLD}IMPORT SUMMARY{RESET}")
-            print(f"  Posts Imported: {GREEN}{self.posts_imported}{RESET}")
-            print(f"  Posts Failed: {RED if self.posts_failed > 0 else GREEN}{self.posts_failed}{RESET}")
-            print(f"  Status: {GREEN}COMPLETE{RESET}")
-            print('='*80 + "\n")
+            # Import posts into database
+            self.import_posts(posts)
+            
+            # Get summary
+            summary = self.get_import_summary()
+            
+            # Log results
+            logger.info("=" * 60)
+            logger.info("R0 - Import Summary")
+            logger.info("=" * 60)
+            logger.info(f"Posts imported: {self.posts_imported}")
+            logger.info(f"Posts updated: {self.posts_updated}")
+            logger.info(f"Posts failed: {self.posts_failed}")
+            logger.info(f"Total posts in database: {summary['total_posts']}")
+            logger.info(f"Total words in database: {summary['total_words']}")
+            logger.info("=" * 60)
+            
             return True
-
+            
         except Exception as e:
-            logger.error(f"Error: {str(e)}")
-            print(f"{RED}✗ Error: {str(e)}{RESET}")
+            logger.error(f"✗ Importer failed: {e}")
             return False
+        
         finally:
-            conn.close()
+            self.close_database()
 
-if __name__ == "__main__":
-    importer = WordPressPostImporter()
-    success = importer.run()
-    sys.exit(0 if success else 1)
+
+def main():
+    """Main entry point"""
+    try:
+        importer = WordPressPostImporter()
+        success = importer.run()
+        
+        if success:
+            logger.info("✓ R0 - WordPress Post Importer completed successfully")
+            sys.exit(0)
+        else:
+            logger.error("✗ R0 - WordPress Post Importer failed")
+            sys.exit(1)
+    
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
