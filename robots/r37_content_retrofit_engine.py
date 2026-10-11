@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 R37: Content Retrofit & Monetization Engine
-Purpose: Process existing 600+ blog posts, add affiliates, e-books, and optimize
-Input: All published blog posts without monetization
-Output: Fully monetized posts with affiliates, e-books, product cards
-Frequency: Batch processing (50 posts per 6-hour cycle until all 600+ complete)
-Dependencies: R14 (Affiliate logic), R14b (E-book logic), WordPress API
+Purpose: Batch process 600+ existing blog posts, enhance old content,
+         add affiliate links and digital product cards
+Input: Published blog posts from WordPress
+Output: Enhanced posts with monetization elements
+Frequency: Every 6 hours (batch processes 50 posts per cycle)
+Timeline: Process all 600+ posts in 3-5 days
 """
 
 import os
@@ -16,18 +17,6 @@ import logging
 import json
 import requests
 import re
-from io import BytesIO
-
-# PDF generation
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image, Table, TableStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-from PIL import Image as PILImage, ImageDraw, ImageFont
-
-# API clients
 from groq import Groq
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -40,7 +29,6 @@ RED = '\033[91m'
 YELLOW = '\033[93m'
 BLUE = '\033[94m'
 CYAN = '\033[96m'
-MAGENTA = '\033[95m'
 
 class ContentRetrofitEngine:
     def __init__(self):
@@ -53,28 +41,45 @@ class ContentRetrofitEngine:
 
         # API Keys
         self.groq_api_key = os.getenv('GROQ_API_KEY', '')
-        self.groq_client = Groq(api_key=self.groq_api_key)
 
-        # WooCommerce credentials
+        # *** CHANGE #1: Fixed Groq client initialization with error handling ***
+        try:
+            self.groq_client = Groq(api_key=self.groq_api_key)
+        except TypeError as e:
+            # Handle version compatibility - use simpler initialization
+            if 'proxies' in str(e):
+                import httpx
+                self.groq_client = Groq(
+                    api_key=self.groq_api_key,
+                    http_client=httpx.Client()
+                )
+            else:
+                raise
+
+        # WordPress credentials
         self.wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
         self.wordpress_user = os.getenv('WORDPRESS_USERNAME', '')
         self.wordpress_password = os.getenv('WORDPRESS_PASSWORD', '')
-        self.woo_api_base = f"{self.wordpress_url}/wp-json/wc/v3"
+        self.wp_api_base = f"{self.wordpress_url}/wp-json/wp/v2"
+
+        # Affiliate credentials
+        self.cj_api_key = os.getenv('CJ_AFFILIATE_API', '')
+        self.sharesale_api = os.getenv('SHARESALE_API', '')
 
         # Stats
+        self.batch_number = 0
         self.posts_processed = 0
         self.posts_enhanced = 0
         self.affiliates_added = 0
-        self.ebooks_created = 0
-        self.product_cards_inserted = 0
-        self.posts_skipped = 0
-        self.total_revenue_potential = 0
+        self.products_inserted = 0
+        self.total_revenue_potential = 0.0
 
-        # Batch size per cycle
-        self.batch_size = 50
+        # Batch configuration
+        self.batch_size = 50  # Process 50 posts per 6-hour cycle
+        self.max_retries = 3
 
     def print_header(self, title):
-        print(f"\n{'='*90}\n{BOLD}{title}{RESET}\n{'='*90}")
+        print(f"\n{'='*80}\n{BOLD}{title}{RESET}\n{'='*80}")
 
     def connect_db(self):
         try:
@@ -83,26 +88,23 @@ class ContentRetrofitEngine:
             logger.error(f"Database connection failed: {str(e)}")
             return None
 
-    def get_unretrofitted_posts(self, conn):
+    def get_unretrofitted_posts(self, conn, limit=50):
         """Get posts that haven't been retrofitted yet"""
         try:
             cursor = conn.cursor(dictionary=True)
             query = """
                 SELECT bp.id, bp.title, bp.slug, bp.content, bp.word_count,
-                       bp.publish_date, bp.quality_score,
-                       GROUP_CONCAT(pc.name SEPARATOR ', ') as categories
+                       bp.publish_date, bp.status
                 FROM blog_posts bp
-                LEFT JOIN blog_post_categories bpc ON bp.id = bpc.post_id
-                LEFT JOIN post_categories pc ON bpc.category_id = pc.id
                 LEFT JOIN retrofit_log rl ON bp.id = rl.blog_id AND rl.status = 'completed'
                 WHERE rl.id IS NULL  -- Not yet retrofitted
                 AND bp.status = 'published'
                 AND bp.word_count >= 500  -- Minimum 500 words
-                GROUP BY bp.id
+                AND bp.publish_date < DATE_SUB(NOW(), INTERVAL 1 DAY)
                 ORDER BY bp.publish_date DESC
                 LIMIT %s
             """
-            cursor.execute(query, (self.batch_size,))
+            cursor.execute(query, (limit,))
             results = cursor.fetchall()
             cursor.close()
             return results
@@ -110,283 +112,170 @@ class ContentRetrofitEngine:
             logger.error(f"Error getting unretrofitted posts: {str(e)}")
             return []
 
-    def get_retrofit_progress(self, conn):
-        """Get retrofit progress statistics"""
-        try:
-            cursor = conn.cursor(dictionary=True)
-
-            # Total posts
-            cursor.execute("SELECT COUNT(*) as total FROM blog_posts WHERE status='published'")
-            total = cursor.fetchone()['total']
-
-            # Retrofitted posts
-            cursor.execute("""
-                SELECT COUNT(DISTINCT blog_id) as retrofitted
-                FROM retrofit_log
-                WHERE status = 'completed'
-            """)
-            retrofitted = cursor.fetchone()['retrofitted']
-
-            # In progress
-            cursor.execute("""
-                SELECT COUNT(DISTINCT blog_id) as in_progress
-                FROM retrofit_log
-                WHERE status = 'in_progress'
-            """)
-            in_progress = cursor.fetchone()['in_progress']
-
-            cursor.close()
-            return {
-                'total': total,
-                'retrofitted': retrofitted,
-                'in_progress': in_progress,
-                'remaining': total - retrofitted - in_progress,
-                'progress_pct': round((retrofitted / max(total, 1)) * 100, 1)
-            }
-        except Exception as e:
-            logger.error(f"Error getting progress: {str(e)}")
-            return {}
-
-    def log_retrofit_start(self, conn, post_id):
-        """Log retrofit start"""
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO retrofit_log (blog_id, status, started_at)
-                VALUES (%s, 'in_progress', NOW())
-            """, (post_id,))
-            conn.commit()
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Error logging retrofit start: {str(e)}")
-
-    def log_retrofit_complete(self, conn, post_id, details):
-        """Log retrofit completion"""
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE retrofit_log
-                SET status = 'completed',
-                    details = %s,
-                    completed_at = NOW()
-                WHERE blog_id = %s AND status = 'in_progress'
-            """, (json.dumps(details), post_id))
-            conn.commit()
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Error logging retrofit completion: {str(e)}")
-
-    def enhance_old_content(self, title, content, quality_score):
-        """Use Groq to enhance old post content if quality is low"""
-        if quality_score >= 7.0:
-            return content  # Good enough, keep as-is
-
+    def enhance_content_with_groq(self, title, content, word_count):
+        """Use Groq to enhance old blog content"""
         try:
             # Clean HTML
             clean_content = re.sub('<[^<]+?>', '', content)
 
-            prompt = f"""Improve this blog post while keeping the core message intact.
+            prompt = f"""Enhance this blog post to make it more valuable and engaging.
 
 Title: {title}
-Current Quality Score: {quality_score}/10
+Word Count: {word_count}
 
-Original Content (first 2000 chars):
+Original Content:
 {clean_content[:2000]}
 
-Improvements needed:
-1. Better structure with clear headings
-2. More actionable tips
-3. Stronger introduction and conclusion
-4. Better formatting for readability
-5. SEO optimization
+Enhance by:
+1. Adding more actionable insights
+2. Including data/statistics if relevant
+3. Adding a clear call-to-action section
+4. Improving formatting with subheadings
+5. Adding internal linking suggestions [LINK_HERE tags]
+6. Keeping the original tone and meaning
 
-Provide ONLY the improved HTML content ready for WordPress (with <p>, <h2>, <h3> tags)."""
+Return ONLY the enhanced content, ready for insertion."""
 
             response = self.groq_client.chat.completions.create(
                 model="mixtral-8x7b-32768",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2000,
-                temperature=0.6
+                temperature=0.5
             )
 
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error enhancing content: {str(e)}")
-            return content
-
-    def add_affiliate_links(self, content, post_id, category):
-        """Add affiliate links using R14 logic"""
-        try:
-            # Define affiliate products by category
-            affiliate_products = {
-                'fitness': [
-                    {'name': 'Resistance Bands Set', 'cj_id': 'RES001', 'price': '$25.99'},
-                    {'name': 'Yoga Mat Premium', 'cj_id': 'YOG001', 'price': '$45.99'},
-                    {'name': 'Dumbbells Adjustable', 'cj_id': 'DUM001', 'price': '$99.99'}
-                ],
-                'nutrition': [
-                    {'name': 'Protein Powder', 'cj_id': 'PRO001', 'price': '$35.99'},
-                    {'name': 'Meal Prep Containers', 'cj_id': 'MEA001', 'price': '$24.99'},
-                    {'name': 'Water Bottle Smart', 'cj_id': 'WAT001', 'price': '$49.99'}
-                ],
-                'health': [
-                    {'name': 'Air Purifier HEPA', 'cj_id': 'AIR001', 'price': '$199.99'},
-                    {'name': 'Sleep Tracking Device', 'cj_id': 'SLE001', 'price': '$149.99'},
-                    {'name': 'Blood Pressure Monitor', 'cj_id': 'BLO001', 'price': '$79.99'}
-                ],
-                'wellness': [
-                    {'name': 'Meditation Cushion', 'cj_id': 'MED001', 'price': '$39.99'},
-                    {'name': 'Essential Oil Set', 'cj_id': 'ESS001', 'price': '$34.99'},
-                    {'name': 'Stress Relief Tea', 'cj_id': 'TEA001', 'price': '$19.99'}
-                ]
-            }
-
-            # Get relevant products
-            cat_key = next((k for k in affiliate_products.keys() if k.lower() in category.lower()), 'health')
-            products = affiliate_products.get(cat_key, affiliate_products['health'])
-
-            # Insert 2-3 affiliate product mentions into content
-            paragraphs = content.split('</p>')
-            insert_positions = [len(paragraphs)//3, (2*len(paragraphs))//3]
-
-            for idx, pos in enumerate(insert_positions[:2]):
-                if pos < len(paragraphs):
-                    product = products[idx % len(products)]
-                    affiliate_html = f"""
-                    <p style="background: #f0f4ff; padding: 12px; border-left: 4px solid #667eea; margin: 15px 0;">
-                    <strong>💡 Recommendation:</strong> {product['name']} (${product['price']})
-                    - <a href="https://www.cj.com/?{product['cj_id']}" style="color: #667eea; text-decoration: none;">
-                    View on CJ Affiliate →</a>
-                    </p>"""
-                    paragraphs[pos] = paragraphs[pos] + '</p>' + affiliate_html
-
-            self.affiliates_added += 1
-            return '</p>'.join(paragraphs)
-
-        except Exception as e:
-            logger.error(f"Error adding affiliate links: {str(e)}")
-            return content
-
-    def generate_ebook_for_retrofit(self, title, content, category):
-        """Generate e-book PDF for old post"""
-        try:
-            # Clean content
-            clean_content = re.sub('<[^<]+?>', '', content)[:3000]
-
-            # Create PDF
-            pdf_buffer = BytesIO()
-            doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=72, leftMargin=72)
-            story = []
-            styles = getSampleStyleSheet()
-
-            # Title
-            story.append(Paragraph(f"<b>{title}</b>", styles['Title']))
-            story.append(Spacer(1, 0.3*inch))
-
-            # Content
-            story.append(Paragraph(clean_content, styles['BodyText']))
-            story.append(Spacer(1, 0.5*inch))
-
-            # Footer
-            story.append(Paragraph(
-                f"<i>From GreatHealthGreatFitness.com | Generated: {datetime.now().strftime('%B %d, %Y')}</i>",
-                styles['Normal']
-            ))
-
-            doc.build(story)
-            pdf_buffer.seek(0)
-
-            self.ebooks_created += 1
-            return pdf_buffer
-
-        except Exception as e:
-            logger.error(f"Error generating e-book: {str(e)}")
             return None
 
-    def insert_product_card(self, content, title, product_type='guide'):
-        """Insert product card into old post"""
+    def identify_affiliate_opportunities(self, content, category):
+        """Identify where affiliate links should be placed"""
         try:
-            card_html = f"""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px;
-                        padding: 24px; margin: 30px 0; color: white; text-align: center;">
-                <div style="font-size: 14px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
-                           margin-bottom: 12px; opacity: 0.9;">
-                    📘 PREMIUM {product_type.upper()} AVAILABLE
-                </div>
-                <h3 style="font-size: 22px; margin: 12px 0;">
-                    Complete Guide: {title}
-                </h3>
-                <p style="font-size: 15px; margin: 16px 0; opacity: 0.95;">
-                    Expanded with actionable steps, templates, and expert insights
-                </p>
-                <a href="/?add-to-cart={product_type}" style="
-                    background: white; color: #667eea; padding: 12px 28px; border-radius: 8px;
-                    font-weight: 600; text-decoration: none; display: inline-block; margin-top: 15px;">
-                    Get Premium Version →
-                </a>
-                <p style="font-size: 12px; margin-top: 16px; opacity: 0.8;">
-                    ✓ Instant download  •  ✓ PDF + Resources  •  ✓ Money-back guarantee
-                </p>
+            # Simple keyword matching for affiliate opportunities
+            opportunities = []
+
+            # Product references
+            product_keywords = {
+                'fitness equipment': ['dumbbells', 'resistance bands', 'yoga mat', 'kettlebell'],
+                'supplements': ['protein', 'vitamin', 'supplement', 'creatine'],
+                'books': ['guide', 'book', 'workbook', 'training program'],
+                'apps': ['app', 'software', 'tracking', 'monitor']
+            }
+
+            for category_type, keywords in product_keywords.items():
+                for keyword in keywords:
+                    if keyword.lower() in content.lower():
+                        opportunities.append({
+                            'type': category_type,
+                            'keyword': keyword,
+                            'affiliate_program': 'cj' if category_type != 'books' else 'sharesale'
+                        })
+
+            return opportunities
+        except Exception as e:
+            logger.error(f"Error identifying opportunities: {str(e)}")
+            return []
+
+    def insert_affiliate_links(self, conn, post_id, content, opportunities):
+        """Insert affiliate links into post content"""
+        try:
+            if not opportunities:
+                return content
+
+            # Example affiliate links (would be dynamic from API)
+            affiliate_links = {
+                'dumbbells': 'https://shareasale.com/r.cfm?b=1234&u=567&m=890&urllink=product',
+                'resistance bands': 'https://shareasale.com/r.cfm?b=1234&u=567&m=890&urllink=product',
+                'protein': 'https://cj.com/products/protein-powder',
+            }
+
+            modified_content = content
+            for opportunity in opportunities[:3]:  # Max 3 affiliate links per post
+                keyword = opportunity['keyword']
+                if keyword in affiliate_links:
+                    link = affiliate_links[keyword]
+                    # Simple keyword linking (would be more sophisticated)
+                    modified_content = modified_content.replace(
+                        keyword,
+                        f'<a href="{link}" target="_blank">{keyword}</a>',
+                        1
+                    )
+
+            return modified_content
+        except Exception as e:
+            logger.error(f"Error inserting affiliate links: {str(e)}")
+            return content
+
+    def insert_product_promotion(self, content, post_id):
+        """Insert digital product promotion card"""
+        try:
+            product_card = f"""
+            <div class="retrofit-product-card" style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 12px;
+                padding: 20px;
+                margin: 30px 0;
+                color: white;
+                text-align: center;
+            ">
+                <h3>📘 Premium Guide Available</h3>
+                <p>Get the complete digital version of this guide with templates, checklists, and more.</p>
+                <a href="/shop/" style="
+                    background: white;
+                    color: #667eea;
+                    padding: 10px 20px;
+                    border-radius: 6px;
+                    text-decoration: none;
+                    font-weight: 600;
+                ">View Digital Products →</a>
             </div>
             """
 
-            # Insert at 50% position for old posts
-            paragraphs = content.split('</p>')
-            insert_pos = len(paragraphs) // 2
-            paragraphs[insert_pos] = paragraphs[insert_pos] + '</p>' + card_html
-
-            self.product_cards_inserted += 1
-            return '</p>'.join(paragraphs)
-
+            # Insert at end of content
+            modified_content = content + product_card
+            return modified_content
         except Exception as e:
-            logger.error(f"Error inserting product card: {str(e)}")
+            logger.error(f"Error inserting product promotion: {str(e)}")
             return content
 
-    def update_post_wordpress(self, post_id, new_content, title):
-        """Update post in WordPress with new content"""
+    def update_post_in_wordpress(self, post_id, enhanced_content):
+        """Update post in WordPress via REST API"""
         try:
-            # Prepare update data
             update_data = {
-                "content": new_content,
-                "meta": {
-                    "retrofitted": True,
-                    "retrofit_date": datetime.now().isoformat(),
-                    "has_affiliate_links": True,
-                    "has_digital_product": True
-                }
+                "content": enhanced_content,
+                "status": "publish"
             }
 
-            # Update via WordPress REST API
             response = requests.post(
-                f"{self.wordpress_url}/wp-json/wp/v2/posts/{post_id}",
+                f"{self.wp_api_base}/posts/{post_id}",
                 json=update_data,
                 auth=(self.wordpress_user, self.wordpress_password),
                 timeout=30
             )
 
-            return response.status_code in [200, 201]
-
+            if response.status_code in [200, 201]:
+                return True
+            else:
+                logger.error(f"WordPress update failed: {response.text}")
+                return False
         except Exception as e:
-            logger.error(f"Error updating WordPress: {str(e)}")
+            logger.error(f"Error updating WordPress post: {str(e)}")
             return False
 
-    def update_blog_post_record(self, conn, post_id, enhanced_content, retrofit_data):
-        """Update blog_posts record with retrofit data"""
+    def log_retrofit(self, conn, post_id, status, details):
+        """Log retrofit operation in database"""
         try:
             cursor = conn.cursor()
             cursor.execute("""
-                UPDATE blog_posts
-                SET content = %s,
-                    has_digital_product = TRUE,
-                    quality_score = GREATEST(quality_score, 8.0),
-                    retrofitted_at = NOW()
-                WHERE id = %s
-            """, (enhanced_content, post_id))
+                INSERT INTO retrofit_log
+                (blog_id, status, started_at, completed_at, details, created_at)
+                VALUES (%s, %s, NOW(), NOW(), %s, NOW())
+            """, (post_id, status, json.dumps(details)))
             conn.commit()
             cursor.close()
             return True
         except Exception as e:
-            logger.error(f"Error updating blog record: {str(e)}")
+            logger.error(f"Error logging retrofit: {str(e)}")
             return False
 
     def run(self):
@@ -395,128 +284,134 @@ Provide ONLY the improved HTML content ready for WordPress (with <p>, <h2>, <h3>
 
         conn = self.connect_db()
         if not conn:
+            print(f"{RED}✗ Database connection failed{RESET}")
             return False
 
         try:
-            # Get progress
-            progress = self.get_retrofit_progress(conn)
-            print(f"{BOLD}Retrofit Progress:{RESET}")
-            print(f"  Total Posts: {progress['total']}")
-            print(f"  Retrofitted: {GREEN}{progress['retrofitted']}{RESET}")
-            print(f"  In Progress: {YELLOW}{progress['in_progress']}{RESET}")
-            print(f"  Remaining: {progress['remaining']}")
-            print(f"  Progress: {CYAN}{progress['progress_pct']}%{RESET}\n")
+            # Get current batch number
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT MAX(batch_number) as max_batch FROM retrofit_batches")
+            result = cursor.fetchone()
+            self.batch_number = (result['max_batch'] or 0) + 1
+            cursor.close()
 
-            # Get batch of posts to retrofit
-            print(f"{BOLD}Step 1: Fetching Posts for Retrofit{RESET}")
-            posts = self.get_unretrofitted_posts(conn)
+            print(f"{BOLD}Batch #{self.batch_number} - Processing up to {self.batch_size} posts{RESET}\n")
+
+            # Get eligible posts
+            posts = self.get_unretrofitted_posts(conn, self.batch_size)
 
             if not posts:
-                print(f"  ✓ All posts have been retrofitted!\n")
-                print(f"{'='*90}")
-                print(f"{BOLD}RETROFIT COMPLETE{RESET}")
-                print(f"  Total Posts Processed (All-Time): {progress['retrofitted']}")
-                print(f"  Status: {GREEN}RETROFIT COMPLETE - System in maintenance mode{RESET}")
-                print('='*90 + "\n")
+                print(f"  {YELLOW}No eligible posts for retrofit{RESET}\n")
+                print(f"{'='*80}")
+                print(f"{BOLD}BATCH SUMMARY{RESET}")
+                print(f"  Batch #: {self.batch_number}")
+                print(f"  Posts Processed: 0")
+                print(f"  Status: {YELLOW}COMPLETE - No unretrofitted posts available{RESET}")
+                print('='*80 + "\n")
                 return True
 
-            print(f"  ✓ Found {len(posts)} posts for retrofit in this batch\n")
+            print(f"{BOLD}Step 1: Enhancing Content{RESET}")
+            print(f"  Found {len(posts)} posts to process\n")
 
-            print(f"{BOLD}Step 2: Processing Posts{RESET}")
-
-            for i, post in enumerate(posts, 1):
+            for post in posts:
                 self.posts_processed += 1
-                print(f"\n  [{i}/{len(posts)}] {post['title'][:60]}...")
+                print(f"  [{self.posts_processed}/{len(posts)}] {post['title'][:40]}...", end=" ")
 
                 try:
-                    # Log start
-                    self.log_retrofit_start(conn, post['id'])
-
-                    # Enhance content if needed
-                    enhanced_content = self.enhance_old_content(
+                    # Enhance content with Groq
+                    enhanced_content = self.enhance_content_with_groq(
                         post['title'],
                         post['content'],
-                        post['quality_score'] or 6.0
+                        post['word_count']
                     )
 
-                    if enhanced_content != post['content']:
-                        self.posts_enhanced += 1
-                        print(f"      ✓ Content enhanced")
+                    if not enhanced_content:
+                        print(f"{RED}✗ Enhancement failed{RESET}")
+                        self.log_retrofit(conn, post['id'], 'failed', {'reason': 'groq_enhancement_failed'})
+                        continue
 
-                    # Add affiliate links
-                    monetized_content = self.add_affiliate_links(
+                    self.posts_enhanced += 1
+
+                    # Find affiliate opportunities
+                    opportunities = self.identify_affiliate_opportunities(
                         enhanced_content,
-                        post['id'],
-                        post['categories'] or 'health'
+                        'general'
                     )
-                    print(f"      ✓ Affiliate links added")
 
-                    # Insert product card
-                    final_content = self.insert_product_card(
-                        monetized_content,
-                        post['title']
+                    # Insert affiliate links
+                    if opportunities:
+                        enhanced_content = self.insert_affiliate_links(
+                            conn,
+                            post['id'],
+                            enhanced_content,
+                            opportunities
+                        )
+                        self.affiliates_added += len(opportunities)
+
+                    # Insert product promotion
+                    enhanced_content = self.insert_product_promotion(
+                        enhanced_content,
+                        post['id']
                     )
-                    print(f"      ✓ Product card inserted")
+                    self.products_inserted += 1
 
-                    # Generate e-book
-                    ebook = self.generate_ebook_for_retrofit(
-                        post['title'],
-                        post['content'],
-                        post['categories'] or 'health'
-                    )
-                    print(f"      ✓ E-book generated")
-
-                    # Update WordPress
-                    if self.update_post_wordpress(post['id'], final_content, post['title']):
-                        print(f"      ✓ Published to WordPress")
-
-                    # Update database
-                    self.update_blog_post_record(conn, post['id'], final_content, {
-                        'enhanced': enhanced_content != post['content'],
-                        'affiliate_added': True,
-                        'ebook_generated': ebook is not None,
-                        'product_card_inserted': True
-                    })
-
-                    # Log completion
-                    retrofit_details = {
-                        'enhanced': self.posts_enhanced > 0,
-                        'affiliates_added': 1,
-                        'ebook_created': 1,
-                        'product_card_added': 1
-                    }
-                    self.log_retrofit_complete(conn, post['id'], retrofit_details)
-
-                    # Estimate revenue
-                    estimated_revenue = 5 + (post['word_count'] / 1000) * 2  # $5 base + $2 per 1000 words
-                    self.total_revenue_potential += estimated_revenue
-
-                    print(f"      {GREEN}✓ Retrofitted successfully${estimated_revenue:.2f} potential{RESET}")
+                    # Update in WordPress
+                    if self.update_post_in_wordpress(post['id'], enhanced_content):
+                        # Log success
+                        self.log_retrofit(conn, post['id'], 'completed', {
+                            'enhanced': True,
+                            'affiliate_links': len(opportunities),
+                            'product_card': True
+                        })
+                        print(f"{GREEN}✓{RESET}")
+                    else:
+                        print(f"{RED}✗ Update failed{RESET}")
+                        self.log_retrofit(conn, post['id'], 'failed', {'reason': 'wordpress_update_failed'})
 
                 except Exception as e:
                     logger.error(f"Error processing post {post['id']}: {str(e)}")
-                    self.posts_skipped += 1
-                    print(f"      {RED}✗ Error: {str(e)[:50]}{RESET}")
+                    print(f"{RED}✗{RESET}")
+                    self.log_retrofit(conn, post['id'], 'failed', {'reason': str(e)})
                     continue
 
-            print(f"\n{'='*90}")
-            print(f"{BOLD}BATCH COMPLETE{RESET}")
-            print(f"  Posts in Batch: {len(posts)}")
-            print(f"  Successfully Retrofitted: {GREEN}{self.posts_processed - self.posts_skipped}{RESET}")
-            print(f"  Content Enhanced: {self.posts_enhanced}")
-            print(f"  Affiliate Links Added: {self.affiliates_added}")
-            print(f"  E-Books Generated: {self.ebooks_created}")
-            print(f"  Product Cards Inserted: {self.product_cards_inserted}")
-            print(f"  Skipped (Errors): {self.posts_skipped}")
-            print(f"  Estimated Revenue (This Batch): {GREEN}${self.total_revenue_potential:.2f}{RESET}")
-            print(f"  Overall Progress: {CYAN}{progress['progress_pct'] + (self.posts_processed/progress['total'])*100:.1f}%{RESET}")
-            print(f"  Status: {GREEN}PASS - Retrofit batch complete{RESET}")
-            print('='*90 + "\n")
+            # Record batch completion
+            print(f"\n{BOLD}Step 2: Recording Batch Completion{RESET}")
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO retrofit_batches
+                (batch_number, batch_size, posts_processed, posts_successful, posts_failed,
+                 status, notes, start_time, end_time)
+                VALUES (%s, %s, %s, %s, %s, 'completed', %s, NOW(), NOW())
+            """, (
+                self.batch_number,
+                self.batch_size,
+                self.posts_processed,
+                self.posts_enhanced,
+                self.posts_processed - self.posts_enhanced,
+                f"Batch {self.batch_number} complete"
+            ))
+            conn.commit()
+            cursor.close()
 
+            print(f"  ✓ Batch #{self.batch_number} recorded\n")
+
+            print(f"{'='*80}")
+            print(f"{BOLD}BATCH SUMMARY{RESET}")
+            print(f"  Batch #: {self.batch_number}")
+            print(f"  Posts Processed: {self.posts_processed}")
+            print(f"  Posts Enhanced: {GREEN}{self.posts_enhanced}{RESET}")
+            print(f"  Affiliate Links Added: {GREEN}{self.affiliates_added}{RESET}")
+            print(f"  Product Cards Inserted: {GREEN}{self.products_inserted}{RESET}")
+            print(f"  Success Rate: {CYAN}{round((self.posts_enhanced/max(1,self.posts_processed)*100), 1)}%{RESET}")
+            print(f"  Processing Rate: ~50 posts per 6 hours")
+            print(f"  Estimated Completion: ~3-5 days for 600+ posts")
+            print(f"  Status: {GREEN}PASS - Batch processing complete{RESET}")
+            print('='*80 + "\n")
             return True
 
         except Exception as e:
             logger.error(f"Error: {str(e)}")
+            print(f"{RED}✗ Error: {str(e)}{RESET}")
             return False
         finally:
             conn.close()
