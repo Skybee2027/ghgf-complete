@@ -1,16 +1,89 @@
-mysql-connector-python==8.2.0
-requests==2.31.0
-aiohttp==3.9.1
-python-dotenv==1.0.0
-groq==0.4.2
-google-generativeai==0.3.1
-anthropic==0.7.1
-openai==1.3.0
-cohere==4.37
-replicate==0.21.1
-pydantic==2.4.2
-pyyaml==6.0.1
+# 36-Robot Autonomous Blogging System - Complete Dependencies
+# Updated: 2026-10-10 with Groq version fix
 
-# R14b: Digital Product Creator dependencies
+# Core Libraries
+requests==2.31.0
+mysql-connector-python==8.2.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# AI & LLM APIs
+groq==0.4.2
+openai==1.3.0
+google-generativeai==0.3.0
+anthropic==0.7.0
+cohere==4.37
+
+# Content & Media
 reportlab==4.0.7
 pillow==10.1.0
+PyPDF2==4.0.1
+python-pptx==0.6.21
+markdown==3.5.1
+
+# WordPress Integration
+wordpress-api==1.3.0
+woocommerce==3.0.0
+
+# Image Processing & Generation
+opencv-python==4.8.1.78
+requests-oauthlib==1.3.0
+
+# Data Processing
+pandas==2.1.3
+numpy==1.26.2
+openpyxl==3.11.0
+
+# Web Scraping & Automation
+selenium==4.15.0
+scrapy==2.11.0
+playwright==1.40.0
+
+# Text & NLP Processing
+nltk==3.8.1
+spacy==3.7.2
+textblob==0.17.1
+python-slugify==8.0.1
+
+# Email & Communication
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Async/HTTP
+aiohttp==3.9.1
+httpx==0.25.2
+uvicorn==0.24.0
+fastapi==0.104.1
+
+# Monitoring & Logging
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Payment Processing
+stripe==6.5.0
+paypalrestsdk==1.7.1
+
+# Authentication
+PyJWT==2.8.1
+cryptography==41.0.7
+
+# Testing (Optional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# JSON Schema Validation
+jsonschema==4.20.0
+
+# Caching
+redis==5.0.1
+
+# Rate Limiting
+limits==3.7.0
+
+# Scheduling
+APScheduler==3.10.4
+
+# Utils
+click==8.1.7
+tqdm==4.66.1
+colorama==0.4.6
