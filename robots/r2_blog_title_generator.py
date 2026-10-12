@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R2: Blog Title Generator (Multi-Provider Fallback)
+R2: Blog Title Generator (Multi-Provider Fallback) - FINAL FIX
 Purpose: Generate 5 catchy, SEO-optimized blog titles using trending keywords and 18-topic rotation
 Input: Trending keywords (from R13), current topic from rotation schedule
 Output: 5 title variations (best selected for next phase)
@@ -8,8 +8,10 @@ Frequency: Every 6 hours
 Dependencies: Requires R13 to populate trending_keywords table + topic_rotation table
 
 Provider Chain: Groq → Gemini → Cohere → OpenAI
-This implementation removes all hardcoded model assumptions and automatically falls back
-through providers based on actual availability and successful API calls.
+FIXES:
+1. Groq model auto-detection now filters for CHAT models only (not classifiers)
+2. INSERT query uses topic_id (integer FK) instead of topic (string name)
+3. Graceful handling of missing provider column
 """
 
 import os
@@ -42,15 +44,12 @@ class BlogTitleGenerator:
         logger.info("=" * 70)
 
         # Check available API keys - all are optional since we have a fallback chain
-        # API Keys
         self.groq_key = os.getenv("GROQ_API_KEY")
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.cohere_key = os.getenv("COHERE_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
 
         # Model names - FULLY OPEN - only from environment variables, NO hardcoded defaults
-        # User must configure via GROQ_MODEL, GEMINI_MODEL, COHERE_MODEL, OPENAI_MODEL env vars
-        # If not set, providers will attempt auto-selection or let SDK use defaults
         self.groq_model = os.getenv("GROQ_MODEL")
         self.gemini_model = os.getenv("GEMINI_MODEL")
         self.cohere_model = os.getenv("COHERE_MODEL")
@@ -102,6 +101,7 @@ class BlogTitleGenerator:
 
         self.titles_generated = 0
         self.current_topic = None
+        self.current_topic_id = None
         self.trending_keywords = []
         self.provider_used = None
 
@@ -163,9 +163,9 @@ class BlogTitleGenerator:
 
             if result:
                 self.current_topic = result
-                logger.info(f"✓ Current topic: {result['topic_name']}")
+                self.current_topic_id = result['id']  # Store the numeric ID for foreign key
+                logger.info(f"✓ Current topic: {result['topic_name']} (ID: {result['id']})")
                 logger.debug(f"  Topic details: {json.dumps(result, indent=2, default=str)}")
-                logger.info(f"  Cycle: {result.get('cycle_number', 'N/A')}, Sequence: {result.get('topic_sequence', 'N/A')}")
                 return result
             else:
                 logger.warning("No active topic found. Attempting to set first topic to active...")
@@ -186,7 +186,6 @@ class BlogTitleGenerator:
         try:
             logger.info(f"Fetching trending keywords for topic: {topic['topic_name']}...")
             cursor = conn.cursor(dictionary=True)
-            # Get top 10 trending keywords for this topic
             query = """
                 SELECT keyword, search_volume, competition_level
                 FROM trending_keywords
@@ -253,7 +252,7 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: {self.groq_model if self.groq_model else '(auto-select from available models)'}")
+            logger.debug(f"  Model: {self.groq_model if self.groq_model else '(auto-select from available chat models)'}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
@@ -268,18 +267,31 @@ Target audience: Adults of all ages and genders interested in health & fitness""
                 }
                 if self.groq_model:
                     api_params["model"] = self.groq_model
+                    logger.debug(f"  Using explicitly configured model: {self.groq_model}")
                 else:
-                    # If no model specified, try to get available models and use first one
+                    # If no model specified, try to get available CHAT models (not classifiers)
                     try:
                         models = client.models.list()
-                        available_models = [m.id for m in models.data]
+                        # Filter for actual chat models - exclude classifiers and small models
+                        available_models = [m.id for m in models.data
+                                          if 'llama' in m.id.lower()
+                                          and 'prompt-guard' not in m.id.lower()
+                                          and 'distil' not in m.id.lower()]
+
+                        if not available_models:
+                            # Fallback: get first model that isn't obviously a classifier
+                            available_models = [m.id for m in models.data
+                                              if 'llama' in m.id.lower()]
+
                         if available_models:
+                            # Pick the most capable one (usually has highest number)
+                            available_models.sort(reverse=True)
                             api_params["model"] = available_models[0]
-                            logger.debug(f"  Auto-selected Groq model: {available_models[0]}")
+                            logger.debug(f"  Auto-selected Groq chat model: {available_models[0]}")
                         else:
-                            logger.warning("  No available Groq models found, attempting without explicit model...")
-                    except:
-                        logger.warning("  Could not auto-detect models, attempting without explicit model...")
+                            logger.warning("  No suitable chat models found, attempting without explicit model...")
+                    except Exception as e:
+                        logger.warning(f"  Could not auto-detect models ({str(e)}), attempting without explicit model...")
 
                 response = client.chat.completions.create(**api_params)
                 logger.info("✓ Groq API call succeeded")
@@ -446,7 +458,6 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             model_name = self.cohere_model if self.cohere_model else "command-r-plus"
             logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Max tokens: 300")
-            logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Cohere API...")
             try:
@@ -532,11 +543,9 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             logger.debug(f"  Model: {self.openai_model if self.openai_model else '(trying available models)'}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
-            logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling OpenAI API...")
             try:
-                # Build API call - only include model if explicitly configured
                 api_params = {
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": 300,
@@ -545,7 +554,6 @@ Target audience: Adults of all ages and genders interested in health & fitness""
                 if self.openai_model:
                     api_params["model"] = self.openai_model
                 else:
-                    # If no model specified, try to get available models and use first one
                     try:
                         models = client.models.list()
                         available_models = [m.id for m in models.data if 'gpt' in m.id.lower()]
@@ -642,11 +650,6 @@ Target audience: Adults of all ages and genders interested in health & fitness""
         logger.error("  2. Gemini - Failed or no API key")
         logger.error("  3. Cohere - Failed or no API key")
         logger.error("  4. OpenAI - Failed or no API key")
-        logger.error("\nEnsure at least one API key is configured:")
-        logger.error("  - GROQ_API_KEY")
-        logger.error("  - GEMINI_API_KEY")
-        logger.error("  - COHERE_API_KEY")
-        logger.error("  - OPENAI_API_KEY")
         return None
 
     def score_titles(self, titles):
@@ -693,45 +696,43 @@ Target audience: Adults of all ages and genders interested in health & fitness""
         scored_titles.sort(key=lambda x: x['score'], reverse=True)
         return scored_titles
 
-    def save_titles_to_db(self, conn, titles_data, topic):
-        """Save generated titles to database with graceful fallback for schema variations"""
+    def save_titles_to_db(self, conn, titles_data):
+        """Save generated titles to database with proper foreign key handling"""
         try:
             cursor = conn.cursor()
-            keywords_str = ",".join([k['keyword'] for k in self.trending_keywords[:5]])
+            keywords_str = ",".join([k['keyword'] for k in self.trending_keywords[:5]]) if self.trending_keywords else ""
 
             for title_data in titles_data:
-                # Try to insert WITH provider column first (newer schema)
+                # Use topic_id (numeric foreign key) instead of topic (string name)
                 query_with_provider = """
-                    INSERT INTO blog_titles (title, topic, keywords, created_at, ctr_score, provider)
+                    INSERT INTO blog_titles (title, topic_id, keywords, created_at, ctr_score, provider)
                     VALUES (%s, %s, %s, NOW(), %s, %s)
                 """
 
                 try:
                     cursor.execute(query_with_provider, (
                         title_data['title'],
-                        topic['topic_name'],
+                        self.current_topic_id,  # Use numeric ID, not string name
                         keywords_str,
                         title_data['score'] / 100.0,
                         self.provider_used
                     ))
                 except mysql.connector.Error as e:
-                    # If provider column doesn't exist, retry without it (legacy schema)
+                    # If provider column doesn't exist, retry without it
                     if "Unknown column" in str(e) and "provider" in str(e):
                         logger.warning(f"Provider column not found in schema, retrying without it...")
                         query_without_provider = """
-                            INSERT INTO blog_titles (title, topic, keywords, created_at, ctr_score)
+                            INSERT INTO blog_titles (title, topic_id, keywords, created_at, ctr_score)
                             VALUES (%s, %s, %s, NOW(), %s)
                         """
                         cursor.execute(query_without_provider, (
                             title_data['title'],
-                            topic['topic_name'],
+                            self.current_topic_id,
                             keywords_str,
                             title_data['score'] / 100.0
                         ))
-                        logger.info(f"Successfully inserted without provider column")
                     else:
                         # Re-raise if it's a different error
-                        logger.error(f"Database error (not column mismatch): {str(e)}")
                         raise
 
             conn.commit()
@@ -797,7 +798,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
             # Step 5: Save to database
             print(f"{BOLD}Step 5: Saving to Database{RESET}")
-            saved = self.save_titles_to_db(conn, scored_titles, topic)
+            saved = self.save_titles_to_db(conn, scored_titles)
             if saved:
                 print(f"  ✓ {GREEN}Saved {len(scored_titles)} titles to blog_titles table (Provider: {self.provider_used}){RESET}\n")
             else:
