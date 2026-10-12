@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS blog_posts (
     plagiarism_score FLOAT DEFAULT 0.0,
     ai_detection_score FLOAT DEFAULT 0.0,
     qa_check_report TEXT,
+    qa_check_passed BOOLEAN DEFAULT FALSE,
     version INT DEFAULT 1,
     bp_version INT DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -370,6 +371,7 @@ CREATE TABLE IF NOT EXISTS system_error_log (
     error_message TEXT,
     error_code VARCHAR(50),
     error_level VARCHAR(50),
+    error_handler_needed BOOLEAN DEFAULT FALSE,
     logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     robot_id VARCHAR(10),
     INDEX idx_error_level (error_level)
