@@ -71,9 +71,42 @@ jobs:
     
     - name: Install dependencies
       run: |
-        apt-get update && apt-get install -y mysql-client
+        apt-get update && apt-get install -y mysql-client dnsutils
         python -m pip install --upgrade pip
         pip install groq google-generativeai cohere openai mysql-connector-python requests
+      continue-on-error: true
+
+    - name: Diagnostic - Test database connectivity
+      run: |
+        echo "====== DATABASE CONNECTIVITY DIAGNOSTIC ======"
+        echo "DB_HOST: $DB_HOST"
+        echo "DB_USER: $DB_USER"
+        echo "DB_NAME: $DB_NAME"
+        echo ""
+
+        # Extract hostname and port
+        HOST_ONLY=$(echo "$DB_HOST" | cut -d: -f1)
+        PORT=$(echo "$DB_HOST" | cut -d: -f2)
+        if [ -z "$PORT" ] || [ "$PORT" = "$HOST_ONLY" ]; then
+          PORT=3306
+        fi
+
+        echo "Extracted: HOST=$HOST_ONLY PORT=$PORT"
+        echo ""
+
+        # Test DNS resolution
+        echo "Testing DNS resolution for $HOST_ONLY..."
+        nslookup "$HOST_ONLY" || echo "⚠️  DNS lookup failed"
+        echo ""
+
+        # Test TCP connection
+        echo "Testing TCP connection to $DB_HOST..."
+        nc -zv "$HOST_ONLY" "$PORT" 2>&1 || echo "⚠️  TCP connection failed"
+        echo ""
+
+        # Test MySQL connection with verbose error
+        echo "Testing MySQL connection with credentials..."
+        mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1;" 2>&1 || echo "⚠️  MySQL connection failed - see error above"
       continue-on-error: true
 
     - name: Wait for MySQL and initialize database
