@@ -2,13 +2,12 @@ name: GHGF Automation
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
-  workflow_dispatch:  # Manual trigger from Actions tab
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   run_robots:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # 1 hour max per workflow run
 
     env:
       # Database Connection
@@ -49,13 +48,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python 3.9
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install -r requirements-36robots-updated.txt
+        run: |
+          pip install -r requirements-36robots-updated.txt
+          apt-get update -qq
+          apt-get install -y -qq mysql-client
+
+      - name: Fix Database Schema
+        run: |
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < fix_database_schema.sql
+          echo "✓ Database schema migration completed"
+        continue-on-error: false
 
       - name: Run R1 API Health Checker
         run: python robots/r1_api_health_checker.py
@@ -65,14 +73,10 @@ jobs:
         run: python run_full_pipeline.py
         continue-on-error: false
 
-      - name: Run Support Robots
+      - name: Run Support Tasks
         run: |
           echo "Running support robots..."
           python robots/r0_wordpress_post_importer.py || true
           python robots/r14b_digital_product_creator.py || true
           python robots/r37_content_retrofit_engine.py || true
         continue-on-error: true
-
-      - name: Workflow Complete
-        if: always()
-        run: echo "✅ GHGF Automation workflow completed at $(date)"
