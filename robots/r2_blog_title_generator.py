@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-R2: Blog Title Generator (Enhanced with Multi-Model Fallback)
+R2: Blog Title Generator (Multi-Provider Fallback)
 Purpose: Generate 5 catchy, SEO-optimized blog titles using trending keywords and 18-topic rotation
 Input: Trending keywords (from R13), current topic from rotation schedule
 Output: 5 title variations (best selected for next phase)
 Frequency: Every 6 hours
 Dependencies: Requires R13 to populate trending_keywords table + topic_rotation table
-Features: Multiple Groq models with automatic fallback if model is deprecated
+
+Provider Chain: Groq → Gemini → OpenAI
+This implementation removes all hardcoded model assumptions and automatically falls back
+through providers based on actual availability and successful API calls.
 """
 
 import os
@@ -15,7 +18,6 @@ import json
 import traceback
 import mysql.connector
 from datetime import datetime
-from groq import Groq
 import logging
 
 # Setup logging with more verbosity
@@ -32,35 +34,59 @@ RED = '\033[91m'
 YELLOW = '\033[93m'
 BLUE = '\033[94m'
 
-# List of Groq models to try in order (fallback mechanism)
-# Updated: October 12, 2026 - Production Models only
-GROQ_MODELS = [
-    "llama-3.3-70b-versatile",      # Primary - Currently Active (Oct 2026)
-    "llama-3.1-8b-instant",         # Fallback 1 - Currently Active
-    "mixtral-8x7b-32768",           # Fallback 2 - May be deprecated
-    "llama-2-70b-chat",             # Fallback 3 - May be deprecated
-]
-
 class BlogTitleGenerator:
     def __init__(self):
-        """Initialize title generator with database and API connections"""
+        """Initialize title generator with database and multi-provider API connections"""
         logger.info("=" * 70)
-        logger.info("Initializing R2: Blog Title Generator")
+        logger.info("Initializing R2: Blog Title Generator (Multi-Provider)")
         logger.info("=" * 70)
 
-        # Check Groq API Key
+        # Check available API keys - all are optional since we have a fallback chain
+        # API Keys
         self.groq_key = os.getenv("GROQ_API_KEY")
-        if not self.groq_key:
-            logger.error("CRITICAL: GROQ_API_KEY environment variable not set!")
-            logger.error("Expected environment variable: GROQ_API_KEY")
-            logger.error("Current environment variables:")
-            for key in os.environ:
-                if 'GROQ' in key or 'API' in key or 'KEY' in key:
-                    logger.error(f"  - {key}: [SET]")
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.cohere_key = os.getenv("COHERE_API_KEY")
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+
+        # Model names - fully configurable, NO hardcoded defaults
+        # User can override with environment variables like:
+        # GROQ_MODEL=llama-3.3-70b-versatile
+        # GEMINI_MODEL=gemini-1.5-flash
+        # COHERE_MODEL=command-r
+        # OPENAI_MODEL=gpt-3.5-turbo
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
+
+        if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
+            logger.error("CRITICAL: No API keys found!")
+            logger.error("At least one of these must be set:")
+            logger.error("  - GROQ_API_KEY")
+            logger.error("  - GEMINI_API_KEY")
+            logger.error("  - COHERE_API_KEY")
+            logger.error("  - OPENAI_API_KEY")
             sys.exit(1)
 
-        logger.info("✓ GROQ_API_KEY is set")
-        logger.debug(f"  Groq API Key (first 10 chars): {self.groq_key[:10]}...")
+        if self.groq_key:
+            logger.info("✓ GROQ_API_KEY is set")
+        else:
+            logger.warning("⚠ GROQ_API_KEY not set - will skip Groq provider")
+
+        if self.gemini_key:
+            logger.info("✓ GEMINI_API_KEY is set")
+        else:
+            logger.warning("⚠ GEMINI_API_KEY not set - will skip Gemini provider")
+
+        if self.cohere_key:
+            logger.info("✓ COHERE_API_KEY is set")
+        else:
+            logger.warning("⚠ COHERE_API_KEY not set - will skip Cohere provider")
+
+        if self.openai_key:
+            logger.info("✓ OPENAI_API_KEY is set")
+        else:
+            logger.warning("⚠ OPENAI_API_KEY not set - will skip OpenAI provider")
 
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -74,7 +100,7 @@ class BlogTitleGenerator:
         self.titles_generated = 0
         self.current_topic = None
         self.trending_keywords = []
-        self.successful_model = None
+        self.provider_used = None
 
     def print_header(self, title):
         """Print formatted header"""
@@ -187,16 +213,26 @@ class BlogTitleGenerator:
             return []
 
     def generate_titles_with_groq(self, topic, keywords):
-        """Generate 5 title variations using Groq with automatic model fallback"""
-        logger.info("=" * 70)
-        logger.info("GROQ API INITIALIZATION & CALL (WITH MODEL FALLBACK)")
-        logger.info("=" * 70)
-        logger.info(f"Available models to try: {', '.join(GROQ_MODELS)}")
+        """Generate 5 title variations using Groq"""
+        if not self.groq_key:
+            logger.debug("Groq API key not available, skipping Groq provider")
+            return None
 
-        keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
-        logger.debug(f"Keywords for prompt: {keywords_list}")
+        try:
+            from groq import Groq
 
-        prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING GROQ PROVIDER")
+            logger.info("=" * 70)
+
+            logger.info("Step 1: Initializing Groq client...")
+            client = Groq(api_key=self.groq_key)
+            logger.info("✓ Groq client initialized successfully")
+
+            keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+            logger.debug(f"Keywords for prompt: {keywords_list}")
+
+            prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
 
 Use these trending keywords naturally: {keywords_list}
 
@@ -213,85 +249,377 @@ Requirements:
 Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
-        # Try each model in sequence
-        for model_index, model in enumerate(GROQ_MODELS, 1):
+            logger.info("Step 2: Building API request...")
+            if self.groq_model:
+                logger.debug(f"  Model: {self.groq_model} (from GROQ_MODEL env var)")
+            else:
+                logger.debug(f"  Model: Not specified - Groq API will use default available model")
+            logger.debug(f"  Max tokens: 300")
+            logger.debug(f"  Temperature: 0.8")
+            logger.debug(f"  Prompt length: {len(prompt)} characters")
+
+            logger.info("Step 3: Calling Groq API...")
             try:
-                logger.info(f"\n[Attempt {model_index}/{len(GROQ_MODELS)}] Trying model: {model}")
-                logger.debug(f"  Max tokens: 300")
-                logger.debug(f"  Temperature: 0.8")
-                logger.debug(f"  Prompt length: {len(prompt)} characters")
+                # Build request kwargs - only add model if specified
+                request_kwargs = {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.8
+                }
+                if self.groq_model:
+                    request_kwargs["model"] = self.groq_model
 
-                logger.info("Initializing Groq client...")
-                client = Groq(api_key=self.groq_key)
-                logger.info("✓ Groq client initialized successfully")
+                response = client.chat.completions.create(**request_kwargs)
+                logger.info("✓ Groq API call succeeded")
+            except Exception as api_error:
+                logger.error(f"GROQ API CALL FAILED:")
+                logger.error(f"  Error Type: {type(api_error).__name__}")
+                logger.error(f"  Error Message: {str(api_error)}")
+                return None
 
-                logger.info(f"Calling Groq API with model: {model}...")
-                try:
-                    response = client.chat.completions.create(
-                        model=model,
-                        messages=[{"role": "user", "content": prompt}],
-                        max_tokens=300,
-                        temperature=0.8
-                    )
-                    logger.info("✓ Groq API call succeeded")
-                except Exception as api_error:
-                    error_str = str(api_error)
-                    logger.warning(f"Model '{model}' failed - {type(api_error).__name__}")
-                    logger.debug(f"  Error: {error_str}")
-                    
-                    # Check if it's a deprecation error
-                    if "decommissioned" in error_str.lower() or "deprecated" in error_str.lower():
-                        logger.warning(f"  ⚠️  Model '{model}' has been decommissioned. Trying next model...")
-                        continue
-                    else:
-                        # Other API errors - still try next model
-                        logger.warning(f"  Other API error. Trying next model...")
-                        continue
+            logger.info("Step 4: Processing response...")
+            if not response.choices:
+                logger.error("Groq returned empty response (no choices)")
+                return None
 
-                # Process response
-                logger.info("Processing response...")
-                if not response.choices:
-                    logger.warning("Groq returned empty response (no choices)")
-                    continue
+            first_choice = response.choices[0]
+            if not first_choice.message or not first_choice.message.content:
+                logger.error("Groq returned empty message content")
+                return None
 
-                first_choice = response.choices[0]
-                if not first_choice.message:
-                    logger.warning("Groq first choice has no message")
-                    continue
+            titles_raw = first_choice.message.content.strip()
+            logger.info(f"✓ Received response content: {len(titles_raw)} characters")
+            logger.debug(f"  Raw content: {titles_raw}")
 
-                if first_choice.message.content:
-                    titles_raw = first_choice.message.content.strip()
-                    logger.info(f"✓ Received response content: {len(titles_raw)} characters")
-                    logger.debug(f"  Raw content: {titles_raw}")
+            titles = [t.strip() for t in titles_raw.split('|')]
+            titles = [t for t in titles if t]  # Remove empty
 
-                    titles = [t.strip() for t in titles_raw.split('|')]
-                    titles = [t for t in titles if t]  # Remove empty
+            logger.info(f"✓ Parsed {len(titles)} titles from Groq response")
+            for i, t in enumerate(titles[:5], 1):
+                logger.debug(f"  Title {i}: {t}")
 
-                    if len(titles) >= 3:  # Require at least 3 titles
-                        logger.info(f"✓ Parsed {len(titles)} titles from response")
-                        for i, t in enumerate(titles[:5], 1):
-                            logger.debug(f"  Title {i}: {t}")
+            self.titles_generated = len(titles)
+            self.provider_used = "Groq"
+            return titles[:5]
 
-                        self.titles_generated = len(titles)
-                        self.successful_model = model
-                        logger.info(f"✅ SUCCESS: Generated {len(titles)} titles using model: {model}")
-                        return titles[:5]
-                    else:
-                        logger.warning(f"Insufficient titles generated ({len(titles)}). Trying next model...")
-                        continue
-                else:
-                    logger.warning("Groq returned empty message content")
-                    continue
+        except ImportError:
+            logger.warning("Groq library not installed, skipping Groq provider")
+            return None
+        except Exception as e:
+            logger.error(f"GROQ PROVIDER FAILED:")
+            logger.error(f"  Error Type: {type(e).__name__}")
+            logger.error(f"  Error Message: {str(e)}")
+            return None
 
-            except Exception as e:
-                logger.error(f"Error with model '{model}': {type(e).__name__}")
-                logger.debug(f"  Error message: {str(e)}")
-                logger.warning(f"  Trying next model...")
-                continue
+    def generate_titles_with_gemini(self, topic, keywords):
+        """Generate 5 title variations using Google Gemini"""
+        if not self.gemini_key:
+            logger.debug("Gemini API key not available, skipping Gemini provider")
+            return None
 
-        # All models failed
-        logger.error("❌ ALL MODELS FAILED - No available model could generate titles")
-        logger.error(f"Models tried: {', '.join(GROQ_MODELS)}")
+        try:
+            import google.generativeai as genai
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING GEMINI PROVIDER")
+            logger.info("=" * 70)
+
+            logger.info("Step 1: Initializing Gemini client...")
+            genai.configure(api_key=self.gemini_key)
+            logger.info("✓ Gemini client initialized successfully")
+
+            keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+            logger.debug(f"Keywords for prompt: {keywords_list}")
+
+            prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
+
+Use these trending keywords naturally: {keywords_list}
+
+Requirements:
+- Each title should be 50-70 characters (good for Google SERP)
+- Include at least one of the trending keywords
+- Make it appealing to ALL age groups and genders
+- Use power words (Top, Best, Complete, Guide, Essential, etc)
+- Include numbers where relevant (10 Tips, 5 Ways, etc)
+- Format: Title1 | Title2 | Title3 | Title4 | Title5
+- Separate with |
+- Return ONLY the titles, nothing else
+
+Topic context: {topic['topic_name']}
+Target audience: Adults of all ages and genders interested in health & fitness"""
+
+            logger.info("Step 2: Building API request...")
+            model_name = self.gemini_model if self.gemini_model else "gemini-pro"
+            logger.debug(f"  Model: {model_name}")
+            logger.debug(f"  Prompt length: {len(prompt)} characters")
+
+            logger.info("Step 3: Calling Gemini API...")
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                logger.info("✓ Gemini API call succeeded")
+            except Exception as api_error:
+                logger.error(f"GEMINI API CALL FAILED:")
+                logger.error(f"  Error Type: {type(api_error).__name__}")
+                logger.error(f"  Error Message: {str(api_error)}")
+                return None
+
+            logger.info("Step 4: Processing response...")
+            if not response or not response.text:
+                logger.error("Gemini returned empty response")
+                return None
+
+            titles_raw = response.text.strip()
+            logger.info(f"✓ Received response content: {len(titles_raw)} characters")
+            logger.debug(f"  Raw content: {titles_raw}")
+
+            titles = [t.strip() for t in titles_raw.split('|')]
+            titles = [t for t in titles if t]  # Remove empty
+
+            logger.info(f"✓ Parsed {len(titles)} titles from Gemini response")
+            for i, t in enumerate(titles[:5], 1):
+                logger.debug(f"  Title {i}: {t}")
+
+            self.titles_generated = len(titles)
+            self.provider_used = "Gemini"
+            return titles[:5]
+
+        except ImportError:
+            logger.warning("Google Generative AI library not installed, skipping Gemini provider")
+            return None
+        except Exception as e:
+            logger.error(f"GEMINI PROVIDER FAILED:")
+            logger.error(f"  Error Type: {type(e).__name__}")
+            logger.error(f"  Error Message: {str(e)}")
+            return None
+
+    def generate_titles_with_cohere(self, topic, keywords):
+        """Generate 5 title variations using Cohere"""
+        if not self.cohere_key:
+            logger.debug("Cohere API key not available, skipping Cohere provider")
+            return None
+
+        try:
+            import cohere
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING COHERE PROVIDER")
+            logger.info("=" * 70)
+
+            logger.info("Step 1: Initializing Cohere client...")
+            client = cohere.ClientV2(api_key=self.cohere_key)
+            logger.info("✓ Cohere client initialized successfully")
+
+            keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+            logger.debug(f"Keywords for prompt: {keywords_list}")
+
+            prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
+
+Use these trending keywords naturally: {keywords_list}
+
+Requirements:
+- Each title should be 50-70 characters (good for Google SERP)
+- Include at least one of the trending keywords
+- Make it appealing to ALL age groups and genders
+- Use power words (Top, Best, Complete, Guide, Essential, etc)
+- Include numbers where relevant (10 Tips, 5 Ways, etc)
+- Format: Title1 | Title2 | Title3 | Title4 | Title5
+- Separate with |
+- Return ONLY the titles, nothing else
+
+Topic context: {topic['topic_name']}
+Target audience: Adults of all ages and genders interested in health & fitness"""
+
+            logger.info("Step 2: Building API request...")
+            model_name = self.cohere_model if self.cohere_model else "command-r"
+            logger.debug(f"  Model: {model_name}")
+            logger.debug(f"  Max tokens: 300")
+            logger.debug(f"  Prompt length: {len(prompt)} characters")
+
+            logger.info("Step 3: Calling Cohere API...")
+            try:
+                response = client.chat(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300
+                )
+                logger.info("✓ Cohere API call succeeded")
+            except Exception as api_error:
+                logger.error(f"COHERE API CALL FAILED:")
+                logger.error(f"  Error Type: {type(api_error).__name__}")
+                logger.error(f"  Error Message: {str(api_error)}")
+                return None
+
+            logger.info("Step 4: Processing response...")
+            if not response or not response.message or not response.message.content:
+                logger.error("Cohere returned empty response")
+                return None
+
+            titles_raw = response.message.content[0].text.strip()
+            logger.info(f"✓ Received response content: {len(titles_raw)} characters")
+            logger.debug(f"  Raw content: {titles_raw}")
+
+            titles = [t.strip() for t in titles_raw.split('|')]
+            titles = [t for t in titles if t]  # Remove empty
+
+            logger.info(f"✓ Parsed {len(titles)} titles from Cohere response")
+            for i, t in enumerate(titles[:5], 1):
+                logger.debug(f"  Title {i}: {t}")
+
+            self.titles_generated = len(titles)
+            self.provider_used = "Cohere"
+            return titles[:5]
+
+        except ImportError:
+            logger.warning("Cohere library not installed, skipping Cohere provider")
+            return None
+        except Exception as e:
+            logger.error(f"COHERE PROVIDER FAILED:")
+            logger.error(f"  Error Type: {type(e).__name__}")
+            logger.error(f"  Error Message: {str(e)}")
+            return None
+
+    def generate_titles_with_openai(self, topic, keywords):
+        """Generate 5 title variations using OpenAI"""
+        if not self.openai_key:
+            logger.debug("OpenAI API key not available, skipping OpenAI provider")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING OPENAI PROVIDER")
+            logger.info("=" * 70)
+
+            logger.info("Step 1: Initializing OpenAI client...")
+            client = OpenAI(api_key=self.openai_key)
+            logger.info("✓ OpenAI client initialized successfully")
+
+            keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+            logger.debug(f"Keywords for prompt: {keywords_list}")
+
+            prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
+
+Use these trending keywords naturally: {keywords_list}
+
+Requirements:
+- Each title should be 50-70 characters (good for Google SERP)
+- Include at least one of the trending keywords
+- Make it appealing to ALL age groups and genders
+- Use power words (Top, Best, Complete, Guide, Essential, etc)
+- Include numbers where relevant (10 Tips, 5 Ways, etc)
+- Format: Title1 | Title2 | Title3 | Title4 | Title5
+- Separate with |
+- Return ONLY the titles, nothing else
+
+Topic context: {topic['topic_name']}
+Target audience: Adults of all ages and genders interested in health & fitness"""
+
+            logger.info("Step 2: Building API request...")
+            model_name = self.openai_model if self.openai_model else "gpt-3.5-turbo"
+            logger.debug(f"  Model: {model_name}")
+            logger.debug(f"  Max tokens: 300")
+            logger.debug(f"  Temperature: 0.8")
+            logger.debug(f"  Prompt length: {len(prompt)} characters")
+
+            logger.info("Step 3: Calling OpenAI API...")
+            try:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                    temperature=0.8
+                )
+                logger.info("✓ OpenAI API call succeeded")
+            except Exception as api_error:
+                logger.error(f"OPENAI API CALL FAILED:")
+                logger.error(f"  Error Type: {type(api_error).__name__}")
+                logger.error(f"  Error Message: {str(api_error)}")
+                return None
+
+            logger.info("Step 4: Processing response...")
+            if not response.choices:
+                logger.error("OpenAI returned empty response (no choices)")
+                return None
+
+            first_choice = response.choices[0]
+            if not first_choice.message or not first_choice.message.content:
+                logger.error("OpenAI returned empty message content")
+                return None
+
+            titles_raw = first_choice.message.content.strip()
+            logger.info(f"✓ Received response content: {len(titles_raw)} characters")
+            logger.debug(f"  Raw content: {titles_raw}")
+
+            titles = [t.strip() for t in titles_raw.split('|')]
+            titles = [t for t in titles if t]  # Remove empty
+
+            logger.info(f"✓ Parsed {len(titles)} titles from OpenAI response")
+            for i, t in enumerate(titles[:5], 1):
+                logger.debug(f"  Title {i}: {t}")
+
+            self.titles_generated = len(titles)
+            self.provider_used = "OpenAI"
+            return titles[:5]
+
+        except ImportError:
+            logger.warning("OpenAI library not installed, skipping OpenAI provider")
+            return None
+        except Exception as e:
+            logger.error(f"OPENAI PROVIDER FAILED:")
+            logger.error(f"  Error Type: {type(e).__name__}")
+            logger.error(f"  Error Message: {str(e)}")
+            return None
+
+    def generate_titles_with_fallback(self, topic, keywords):
+        """Generate titles using provider fallback chain: Groq → Gemini → Cohere → OpenAI"""
+        logger.info("=" * 70)
+        logger.info("TITLE GENERATION - MULTI-PROVIDER FALLBACK")
+        logger.info("=" * 70)
+
+        # Try Groq first
+        logger.info("\n[1/4] Trying Groq provider...")
+        titles = self.generate_titles_with_groq(topic, keywords)
+        if titles:
+            logger.info(f"✓ Successfully generated titles using {self.provider_used}")
+            return titles
+
+        # Try Gemini second
+        logger.info("\n[2/4] Groq failed, trying Gemini provider...")
+        titles = self.generate_titles_with_gemini(topic, keywords)
+        if titles:
+            logger.info(f"✓ Successfully generated titles using {self.provider_used}")
+            return titles
+
+        # Try Cohere third
+        logger.info("\n[3/4] Gemini failed, trying Cohere provider...")
+        titles = self.generate_titles_with_cohere(topic, keywords)
+        if titles:
+            logger.info(f"✓ Successfully generated titles using {self.provider_used}")
+            return titles
+
+        # Try OpenAI fourth
+        logger.info("\n[4/4] Cohere failed, trying OpenAI provider...")
+        titles = self.generate_titles_with_openai(topic, keywords)
+        if titles:
+            logger.info(f"✓ Successfully generated titles using {self.provider_used}")
+            return titles
+
+        # All providers failed
+        logger.error("=" * 70)
+        logger.error("❌ ALL PROVIDERS FAILED")
+        logger.error("=" * 70)
+        logger.error("Could not generate titles from any provider:")
+        logger.error("  1. Groq - Failed or no API key")
+        logger.error("  2. Gemini - Failed or no API key")
+        logger.error("  3. Cohere - Failed or no API key")
+        logger.error("  4. OpenAI - Failed or no API key")
+        logger.error("\nEnsure at least one API key is configured:")
+        logger.error("  - GROQ_API_KEY")
+        logger.error("  - GEMINI_API_KEY")
+        logger.error("  - COHERE_API_KEY")
+        logger.error("  - OPENAI_API_KEY")
         return None
 
     def score_titles(self, titles):
@@ -347,18 +675,19 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
             for title_data in titles_data:
                 query = """
-                    INSERT INTO blog_titles (title, topic, keywords, created_at, ctr_score)
-                    VALUES (%s, %s, %s, NOW(), %s)
+                    INSERT INTO blog_titles (title, topic, keywords, created_at, ctr_score, provider)
+                    VALUES (%s, %s, %s, NOW(), %s, %s)
                 """
                 cursor.execute(query, (
                     title_data['title'],
                     topic['topic_name'],
                     keywords_str,
-                    title_data['score'] / 100.0
+                    title_data['score'] / 100.0,
+                    self.provider_used
                 ))
 
             conn.commit()
-            logger.info(f"Saved {len(titles_data)} titles to database")
+            logger.info(f"Saved {len(titles_data)} titles to database (Provider: {self.provider_used})")
             return True
         except Exception as e:
             logger.error(f"Error saving titles: {str(e)}")
@@ -368,7 +697,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
     def run(self):
         """Main execution flow"""
-        self.print_header("R2: BLOG TITLE GENERATOR (Multi-Model Fallback)")
+        self.print_header("R2: BLOG TITLE GENERATOR (MULTI-PROVIDER)")
         print(f"Execution: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
         # Connect to database
@@ -395,11 +724,12 @@ Target audience: Adults of all ages and genders interested in health & fitness""
                 print(f"  • {kw['keyword']} (Volume: {kw['search_volume']}, Competition: {kw['competition_level']})")
             print()
 
-            # Step 3: Generate titles using Groq (with model fallback)
-            print(f"{BOLD}Step 3: Generating 5 Title Variations{RESET}")
-            titles = self.generate_titles_with_groq(topic, keywords)
+            # Step 3: Generate titles using multi-provider fallback
+            print(f"{BOLD}Step 3: Generating 5 Title Variations (Multi-Provider Fallback){RESET}")
+            titles = self.generate_titles_with_fallback(topic, keywords)
             if not titles:
-                logger.error("Failed to generate titles")
+                logger.error("Failed to generate titles from any provider")
+                print(f"  {RED}✗ Failed to generate titles{RESET}\n")
                 return False
 
             for i, title in enumerate(titles, 1):
@@ -418,7 +748,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             print(f"{BOLD}Step 5: Saving to Database{RESET}")
             saved = self.save_titles_to_db(conn, scored_titles, topic)
             if saved:
-                print(f"  ✓ {GREEN}Saved {len(scored_titles)} titles to blog_titles table{RESET}\n")
+                print(f"  ✓ {GREEN}Saved {len(scored_titles)} titles to blog_titles table (Provider: {self.provider_used}){RESET}\n")
 
             # Summary
             print(f"{'='*70}")
@@ -426,7 +756,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             print(f"  Topic: {BLUE}{topic['topic_name']}{RESET}")
             print(f"  Keywords: {len(keywords)} trending keywords available")
             print(f"  Titles Generated: {GREEN}{self.titles_generated}{RESET}")
-            print(f"  Model Used: {BLUE}{self.successful_model}{RESET}")
+            print(f"  Provider Used: {GREEN}{self.provider_used}{RESET}")
             print(f"  Best Title: {BLUE}{scored_titles[0]['title']}{RESET} (Score: {scored_titles[0]['score']}/100)")
             print(f"  Status: {GREEN}SUCCESS{RESET}")
             print('='*70 + "\n")
