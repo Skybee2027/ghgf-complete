@@ -8,6 +8,7 @@ on:
 jobs:
   run_robots:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     env:
       # Database Connection
