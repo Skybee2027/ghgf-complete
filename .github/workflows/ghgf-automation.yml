@@ -1,188 +1,60 @@
-name: GHGF 42-Robot Autonomous Blogging System
+name: GHGF 42-Robot Autonomous Blogging Pipeline
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
-  workflow_dispatch:       # Manual trigger
+    - cron: '0 */6 * * *'  # Run every 6 hours
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  DB_HOST: ${{ secrets.DB_HOST }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
 jobs:
-  ghgf-pipeline:
+  run-pipeline:
     runs-on: ubuntu-latest
     
-    # Set environment variables from GitHub Actions Secrets
-    env:
-      DB_HOST: ${{ secrets.DB_HOST }}
-      DB_USER: ${{ secrets.DB_USER }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      DB_NAME: ${{ secrets.DB_NAME }}
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-    
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-      
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-client
-      
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install groq mysql-connector-python requests
-        continue-on-error: true
-      
-      - name: Verify Environment Variables
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "ENVIRONMENT VARIABLE VERIFICATION"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          ERRORS=0
-          
-          if [ -z "$DB_HOST" ]; then
-            echo "❌ ERROR: DB_HOST not set"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ DB_HOST is set: $DB_HOST"
-          fi
-          
-          if [ -z "$DB_USER" ]; then
-            echo "❌ ERROR: DB_USER not set"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ DB_USER is set: $DB_USER"
-          fi
-          
-          if [ -z "$DB_PASSWORD" ]; then
-            echo "❌ ERROR: DB_PASSWORD not set"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ DB_PASSWORD is set"
-          fi
-          
-          if [ -z "$DB_NAME" ]; then
-            echo "❌ ERROR: DB_NAME not set"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ DB_NAME is set: $DB_NAME"
-          fi
-          
-          if [ -z "$GROQ_API_KEY" ]; then
-            echo "❌ ERROR: GROQ_API_KEY not set"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ GROQ_API_KEY is set"
-          fi
-          
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          if [ $ERRORS -gt 0 ]; then
-            echo "❌ $ERRORS environment variable(s) missing!"
-            echo ""
-            echo "Please add these GitHub Actions Secrets:"
-            echo "  Settings → Secrets and variables → Actions → New repository secret"
-            echo ""
-            echo "  - DB_HOST"
-            echo "  - DB_USER"
-            echo "  - DB_PASSWORD"
-            echo "  - DB_NAME"
-            echo "  - GROQ_API_KEY"
-            exit 1
-          else
-            echo "✅ All required environment variables configured!"
-          fi
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      
-      - name: Test Database Connection
-        run: |
-          echo "Testing database connection to $DB_HOST..."
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SELECT 1 as connection_test;" 2>&1 | head -20
-          
-          if [ $? -eq 0 ]; then
-            echo "✓ Database connection successful"
-          else
-            echo "❌ Database connection failed - check credentials"
-            exit 1
-          fi
-      
-      - name: Fix Database Schema
-        run: |
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "EXECUTING DATABASE SCHEMA MIGRATION"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          if [ ! -f "fix_database_schema.sql" ]; then
-            echo "❌ ERROR: fix_database_schema.sql not found in repository root"
-            exit 1
-          fi
-          
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < fix_database_schema.sql
-          
-          SCHEMA_RESULT=$?
-          
-          if [ $SCHEMA_RESULT -eq 0 ]; then
-            echo ""
-            echo "✓ Database schema migration completed successfully"
-          else
-            echo ""
-            echo "❌ Database schema migration failed (exit code: $SCHEMA_RESULT)"
-            echo "Check the error messages above"
-            exit 1
-          fi
-          
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        continue-on-error: false
-      
-      - name: Run Full 35-Robot Pipeline
-        run: |
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "STARTING GHGF 35-ROBOT AUTONOMOUS PIPELINE"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-          echo ""
-          
-          if [ ! -f "run_full_pipeline.py" ]; then
-            echo "❌ ERROR: run_full_pipeline.py not found in repository root"
-            exit 1
-          fi
-          
-          python run_full_pipeline.py
-          
-          PIPELINE_RESULT=$?
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "PIPELINE EXECUTION COMPLETED"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          exit $PIPELINE_RESULT
-        continue-on-error: false
-      
-      - name: Pipeline Success Notification
-        if: success()
-        run: |
-          echo ""
-          echo "✅ GHGF Pipeline completed successfully!"
-          echo "New blog post is being published..."
-          echo "Check your WordPress dashboard in a few minutes"
-      
-      - name: Pipeline Failure Notification
-        if: failure()
-        run: |
-          echo ""
-          echo "❌ GHGF Pipeline encountered errors"
-          echo "Review the log output above for details"
-          echo ""
-          echo "Common issues:"
-          echo "  - Database credentials incorrect (check GitHub Secrets)"
-          echo "  - GROQ_API_KEY missing or invalid"
-          echo "  - Database schema migration failed"
-          echo "  - Python script errors (check log output)"
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Verify environment variables are set
+      run: |
+        echo "Checking required environment variables..."
+        if [ -z "$DB_HOST" ]; then echo "ERROR: DB_HOST not set"; exit 1; fi
+        if [ -z "$DB_USER" ]; then echo "ERROR: DB_USER not set"; exit 1; fi
+        if [ -z "$DB_PASSWORD" ]; then echo "ERROR: DB_PASSWORD not set"; exit 1; fi
+        if [ -z "$DB_NAME" ]; then echo "ERROR: DB_NAME not set"; exit 1; fi
+        if [ -z "$GROQ_API_KEY" ]; then echo "ERROR: GROQ_API_KEY not set"; exit 1; fi
+        echo "✅ All environment variables verified"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install groq mysql-connector-python requests
+      continue-on-error: true
+    
+    - name: Run GHGF Pipeline
+      run: python run_full_pipeline.py
+      working-directory: ./
+    
+    - name: Upload error logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: pipeline-error-logs
+        path: error_log_*.txt
+        retention-days: 30
+    
+    - name: Workflow status
+      if: always()
+      run: |
+        echo "Workflow completed"
+        echo "Check the logs above for any robot failures"
