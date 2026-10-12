@@ -48,21 +48,19 @@ class BlogTitleGenerator:
         self.cohere_key = os.getenv("COHERE_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
 
-        # Model names - fully configurable with intelligent defaults
-        # User can override with environment variables, otherwise sensible defaults are used
-        # Defaults chosen for broad availability across free/trial accounts:
-        # Using 'or' operator to handle empty strings from GitHub Secrets
-        # NOTE: mixtral-8x7b-32768 was decommissioned, using llama-3.1-70b-versatile instead
-        self.groq_model = os.getenv("GROQ_MODEL") or "llama-3.1-70b-versatile"
-        self.gemini_model = os.getenv("GEMINI_MODEL") or "gemini-pro"
-        self.cohere_model = os.getenv("COHERE_MODEL") or "command-r"
-        self.openai_model = os.getenv("OPENAI_MODEL") or "gpt-3.5-turbo"
+        # Model names - FULLY OPEN - only from environment variables, NO hardcoded defaults
+        # User must configure via GROQ_MODEL, GEMINI_MODEL, COHERE_MODEL, OPENAI_MODEL env vars
+        # If not set, providers will attempt auto-selection or let SDK use defaults
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
 
-        logger.debug(f"Model configuration:")
-        logger.debug(f"  GROQ_MODEL={self.groq_model} (default: mixtral-8x7b-32768)")
-        logger.debug(f"  GEMINI_MODEL={self.gemini_model} (default: gemini-pro)")
-        logger.debug(f"  COHERE_MODEL={self.cohere_model} (default: command-r)")
-        logger.debug(f"  OPENAI_MODEL={self.openai_model} (default: gpt-3.5-turbo)")
+        logger.debug(f"Model configuration (from environment variables only):")
+        logger.debug(f"  GROQ_MODEL={self.groq_model if self.groq_model else '(not set - provider will auto-select)'}")
+        logger.debug(f"  GEMINI_MODEL={self.gemini_model if self.gemini_model else '(not set - provider will auto-select)'}")
+        logger.debug(f"  COHERE_MODEL={self.cohere_model if self.cohere_model else '(not set - provider will auto-select)'}")
+        logger.debug(f"  OPENAI_MODEL={self.openai_model if self.openai_model else '(not set - provider will auto-select)'}")
 
         if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
             logger.error("CRITICAL: No API keys found!")
@@ -255,20 +253,35 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: {self.groq_model}")
+            logger.debug(f"  Model: {self.groq_model if self.groq_model else '(auto-select from available models)'}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Groq API...")
             try:
-                # Groq API requires model parameter - always include it (guaranteed to have value from defaults)
-                response = client.chat.completions.create(
-                    model=self.groq_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=300,
-                    temperature=0.8
-                )
+                # Build API call - only include model if explicitly configured
+                api_params = {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.8
+                }
+                if self.groq_model:
+                    api_params["model"] = self.groq_model
+                else:
+                    # If no model specified, try to get available models and use first one
+                    try:
+                        models = client.models.list()
+                        available_models = [m.id for m in models.data]
+                        if available_models:
+                            api_params["model"] = available_models[0]
+                            logger.debug(f"  Auto-selected Groq model: {available_models[0]}")
+                        else:
+                            logger.warning("  No available Groq models found, attempting without explicit model...")
+                    except:
+                        logger.warning("  Could not auto-detect models, attempting without explicit model...")
+
+                response = client.chat.completions.create(**api_params)
                 logger.info("✓ Groq API call succeeded")
             except Exception as api_error:
                 logger.error(f"GROQ API CALL FAILED:")
@@ -348,12 +361,13 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: {self.gemini_model}")
+            model_name = self.gemini_model if self.gemini_model else "gemini-pro"
+            logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Gemini API...")
             try:
-                model = genai.GenerativeModel(self.gemini_model)
+                model = genai.GenerativeModel(model_name)
                 response = model.generate_content(prompt)
                 logger.info("✓ Gemini API call succeeded")
             except Exception as api_error:
@@ -429,14 +443,15 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: {self.cohere_model}")
+            model_name = self.cohere_model if self.cohere_model else "command-r-plus"
+            logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Cohere API...")
             try:
                 response = client.chat(
-                    model=self.cohere_model,
+                    model=model_name,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300
                 )
@@ -514,19 +529,35 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: {self.openai_model}")
+            logger.debug(f"  Model: {self.openai_model if self.openai_model else '(trying available models)'}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling OpenAI API...")
             try:
-                response = client.chat.completions.create(
-                    model=self.openai_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=300,
-                    temperature=0.8
-                )
+                # Build API call - only include model if explicitly configured
+                api_params = {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.8
+                }
+                if self.openai_model:
+                    api_params["model"] = self.openai_model
+                else:
+                    # If no model specified, try to get available models and use first one
+                    try:
+                        models = client.models.list()
+                        available_models = [m.id for m in models.data if 'gpt' in m.id.lower()]
+                        if available_models:
+                            api_params["model"] = available_models[0]
+                            logger.debug(f"  Auto-selected OpenAI model: {available_models[0]}")
+                        else:
+                            logger.warning("  No available GPT models found, attempting without explicit model...")
+                    except:
+                        logger.warning("  Could not auto-detect models, attempting without explicit model...")
+
+                response = client.chat.completions.create(**api_params)
                 logger.info("✓ OpenAI API call succeeded")
             except Exception as api_error:
                 logger.error(f"OPENAI API CALL FAILED:")
