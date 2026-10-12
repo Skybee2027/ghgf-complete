@@ -34,8 +34,10 @@ class BlogContentGenerator:
         """Initialize content generator"""
         self.groq_key = os.getenv("GROQ_API_KEY")
         self.google_key = os.getenv("GOOGLE_API_KEY")
-        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
-        self.gemini_model = os.getenv("GEMINI_MODEL")
+
+        # Use hardcoded model defaults - no environment variable dependency
+        self.groq_model = "mixtral-8x7b-32768"  # Groq's fast, reliable model
+        self.gemini_model = "gemini-pro"        # Gemini's default model
 
         if not self.groq_key:
             logger.error("GROQ_API_KEY not set")

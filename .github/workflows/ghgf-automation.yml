@@ -19,17 +19,12 @@ env:
   COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-  # Optional: Specify which model to use for each provider
-  # If not set, each provider will use its default/available model
-  # Examples:
-  #   GROQ_MODEL=llama-3.3-70b-versatile
-  #   GEMINI_MODEL=gemini-1.5-pro
-  #   COHERE_MODEL=command-r-plus
-  #   OPENAI_MODEL=gpt-4-turbo
-  GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
-  GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
-  COHERE_MODEL: ${{ secrets.COHERE_MODEL }}
-  OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+  # Note: Model names are now hardcoded in robot scripts (no env variable dependency)
+  # Robots use proven defaults:
+  #   Groq: mixtral-8x7b-32768
+  #   Gemini: gemini-pro
+  #   Cohere: command-r-plus
+  #   OpenAI: gpt-3.5-turbo
 
   # WordPress Configuration (for publishing)
   WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
