@@ -7,8 +7,8 @@ on:
 
 env:
   # Database Configuration
-  # Note: In GitHub Actions, MySQL service is accessed via localhost:3306
-  DB_HOST: localhost
+  # Note: DB_HOST should be your external database server, not localhost
+  DB_HOST: ${{ secrets.DB_HOST || 'localhost' }}
   DB_USER: ${{ secrets.DB_USER || 'root' }}
   DB_PASSWORD: ${{ secrets.DB_PASSWORD || 'root' }}
   DB_NAME: ${{ secrets.DB_NAME || 'ghgf_blogging' }}
