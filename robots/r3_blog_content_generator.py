@@ -33,7 +33,7 @@ class BlogContentGenerator:
     def __init__(self):
         """Initialize content generator"""
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.google_key = os.getenv("GOOGLE_API_KEY")
+        self.gemini_key = os.getenv("GEMINI_API_KEY")  # Google Gemini API key
 
         # Use hardcoded model defaults - no environment variable dependency
         self.groq_model = "mixtral-8x7b-32768"  # Groq's fast, reliable model
@@ -180,7 +180,7 @@ Return ONLY the HTML content, no explanations."""
         """Fallback: Generate content using Google Gemini"""
         try:
             import google.generativeai as genai
-            genai.configure(api_key=self.google_key)
+            genai.configure(api_key=self.gemini_key)
 
             keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
 

@@ -27,8 +27,8 @@ env:
   #   OpenAI: gpt-3.5-turbo
 
   # WordPress Configuration (for publishing)
-  WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
-  WORDPRESS_USER: ${{ secrets.WORDPRESS_USER || 'api_user' }}
+  WORDPRESS_URL: ${{ secrets.WORDPRESS_SITE_URL || secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
+  WORDPRESS_USER: ${{ secrets.WORDPRESS_USERNAME || secrets.WORDPRESS_USER || 'api_user' }}
   WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD || '' }}
 
 jobs:
