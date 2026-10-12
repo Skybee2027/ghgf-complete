@@ -211,10 +211,20 @@ class WordPressUploaderPublisher:
                 return wordpress_post_id
             else:
                 error_detail = response.text
-                logger.error(f"Publishing failed: {response.status_code} - {error_detail}")
+                error_msg = f"Publishing failed: {response.status_code} - {error_detail[:200]}"
+                logger.error(error_msg)
+                print(f"      {RED}ERROR: {error_msg}{RESET}")
+
+                # Log critical authentication errors
+                if response.status_code == 401:
+                    print(f"      {RED}⚠️  CRITICAL: WordPress authentication FAILED (401 Unauthorized){RESET}")
+                    print(f"      {RED}   Check: WORDPRESS_USER and WORDPRESS_PASSWORD credentials{RESET}")
+
                 return None
         except Exception as e:
-            logger.error(f"Error publishing post: {str(e)}")
+            error_msg = f"Error publishing post: {str(e)}"
+            logger.error(error_msg)
+            print(f"      {RED}EXCEPTION: {error_msg}{RESET}")
             return None
 
     def save_wordpress_post_id(self, conn, blog_id, wordpress_post_id):
@@ -318,9 +328,16 @@ class WordPressUploaderPublisher:
             print(f"  Features: Featured images, categories, tags, metadata")
             print(f"  Status Lock: Posts marked 'published', cannot be edited by other robots")
             print(f"  Next Stage: R32 (Post-Publication Monitoring) + R21 (Social Publishing)")
-            print(f"  Status: {GREEN}PASS - WordPress publishing complete{RESET}")
-            print('='*70 + "\n")
-            return True
+
+            # Return True only if all posts were published successfully
+            if self.posts_failed > 0:
+                print(f"  Status: {RED}FAIL - {self.posts_failed} posts failed to publish{RESET}")
+                print('='*70 + "\n")
+                return False
+            else:
+                print(f"  Status: {GREEN}PASS - WordPress publishing complete{RESET}")
+                print('='*70 + "\n")
+                return True
 
         except Exception as e:
             logger.error(f"Error: {str(e)}")
