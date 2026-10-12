@@ -20,11 +20,12 @@ env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
   # LLM Model Names (required for API calls)
+  # Configured for free/starter tier accounts
   # Can be overridden via GitHub Secrets if needed
-  GROQ_MODEL: ${{ secrets.GROQ_MODEL || 'llama-3.1-70b-versatile' }}
-  GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-1.5-pro' }}
-  COHERE_MODEL: ${{ secrets.COHERE_MODEL || 'command-r' }}
-  OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4-turbo' }}
+  GROQ_MODEL: ${{ secrets.GROQ_MODEL || 'llama-3.1-8b-instant' }}
+  GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-1.5-flash' }}
+  COHERE_MODEL: ${{ secrets.COHERE_MODEL || 'command-light' }}
+  OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4o-mini' }}
 
   # WordPress Configuration (for publishing)
   WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
