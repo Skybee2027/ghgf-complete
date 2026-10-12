@@ -6,11 +6,29 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 env:
+  # Database Configuration
   DB_HOST: ${{ secrets.DB_HOST }}
   DB_USER: ${{ secrets.DB_USER }}
   DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
   DB_NAME: ${{ secrets.DB_NAME }}
+
+  # LLM Provider API Keys (at least one required)
   GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  # Optional: Specify which model to use for each provider
+  # If not set, each provider will use its default/available model
+  # Examples:
+  #   GROQ_MODEL=llama-3.3-70b-versatile
+  #   GEMINI_MODEL=gemini-1.5-pro
+  #   COHERE_MODEL=command-r-plus
+  #   OPENAI_MODEL=gpt-4-turbo
+  GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+  GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+  COHERE_MODEL: ${{ secrets.COHERE_MODEL }}
+  OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
 jobs:
   run-pipeline:
@@ -32,13 +50,23 @@ jobs:
         if [ -z "$DB_USER" ]; then echo "ERROR: DB_USER not set"; exit 1; fi
         if [ -z "$DB_PASSWORD" ]; then echo "ERROR: DB_PASSWORD not set"; exit 1; fi
         if [ -z "$DB_NAME" ]; then echo "ERROR: DB_NAME not set"; exit 1; fi
-        if [ -z "$GROQ_API_KEY" ]; then echo "ERROR: GROQ_API_KEY not set"; exit 1; fi
-        echo "✅ All environment variables verified"
+
+        echo "Checking LLM API keys (at least one required for multi-provider fallback)..."
+        if [ -z "$GROQ_API_KEY" ] && [ -z "$GEMINI_API_KEY" ] && [ -z "$COHERE_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+          echo "ERROR: At least one LLM API key must be set (GROQ_API_KEY, GEMINI_API_KEY, COHERE_API_KEY, or OPENAI_API_KEY)"
+          exit 1
+        fi
+
+        [ -n "$GROQ_API_KEY" ] && echo "✅ GROQ_API_KEY is set"
+        [ -n "$GEMINI_API_KEY" ] && echo "✅ GEMINI_API_KEY is set"
+        [ -n "$COHERE_API_KEY" ] && echo "✅ COHERE_API_KEY is set"
+        [ -n "$OPENAI_API_KEY" ] && echo "✅ OPENAI_API_KEY is set"
+        echo "✅ Database and LLM configuration verified"
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install groq mysql-connector-python requests
+        pip install groq google-generativeai cohere openai mysql-connector-python requests
       continue-on-error: true
     
     - name: Run GHGF Pipeline
