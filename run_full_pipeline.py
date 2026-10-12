@@ -138,19 +138,20 @@ def main():
     # Verify database before running robots
     if not verify_database():
         logger.error("✗ Database verification failed - aborting pipeline")
+        print("\n❌ PIPELINE FAILED: Database verification failed")
         return 1
-    
+
     successful = 0
     failed = 0
     skipped = 0
-    
+
     for robot_file, robot_name in PIPELINE:
         success = run_robot(robot_file, robot_name)
         if success:
             successful += 1
         else:
             failed += 1
-    
+
     # Summary
     logger.info("\n" + "=" * 80)
     logger.info("PIPELINE EXECUTION SUMMARY")
@@ -158,12 +159,24 @@ def main():
     logger.info(f"Failed: {failed}/{len(PIPELINE)}")
     logger.info(f"Skipped: {skipped}/{len(PIPELINE)}")
     logger.info("=" * 80)
-    
+
+    # PRINT to stdout for workflow visibility
+    print("\n" + "=" * 80)
+    print("PIPELINE EXECUTION RESULT")
+    print(f"Robots Run: {len(PIPELINE)}")
+    print(f"Successful: {successful}")
+    print(f"Failed: {failed}")
+    print("=" * 80)
+
     if failed == 0:
         logger.info("✅ FULL PIPELINE COMPLETE - All robots executed successfully")
+        print("✅ ALL ROBOTS SUCCEEDED - Blog post published to WordPress!")
         return 0
     else:
         logger.warning(f"⚠️  PIPELINE COMPLETE WITH ERRORS - {failed} robots failed")
+        print(f"⚠️  FAILED ROBOTS: {failed}/{len(PIPELINE)}")
+        print("Check error log files for details")
+        # Still return 1 so GitHub Actions knows there was an error
         return 1
 
 if __name__ == '__main__':
