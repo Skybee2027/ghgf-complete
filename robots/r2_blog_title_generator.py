@@ -208,7 +208,7 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: mixtral-8x7b-32768")
+            logger.debug(f"  Model: llama-3.1-70b-versatile")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
@@ -216,7 +216,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             logger.info("Step 3: Calling Groq API...")
             try:
                 response = client.chat.completions.create(
-                    model="mixtral-8x7b-32768",
+                    model="llama-3.1-70b-versatile",
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300,
                     temperature=0.8
