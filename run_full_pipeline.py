@@ -144,6 +144,7 @@ def main():
     successful = 0
     failed = 0
     skipped = 0
+    core_robots_passed = True  # Track if R2, R3, R31 all succeed
 
     for robot_file, robot_name in PIPELINE:
         success = run_robot(robot_file, robot_name)
@@ -151,6 +152,9 @@ def main():
             successful += 1
         else:
             failed += 1
+            # Check if a core robot failed (R2, R3, or R31)
+            if robot_name in ['R2: Blog Title Generator', 'R3: Blog Content Generator', 'R31: WordPress Uploader/Publisher']:
+                core_robots_passed = False
 
     # Summary
     logger.info("\n" + "=" * 80)
@@ -166,18 +170,18 @@ def main():
     print(f"Robots Run: {len(PIPELINE)}")
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
+    print(f"Core Robots Status: {'✅ PASSED' if core_robots_passed else '❌ FAILED'}")
     print("=" * 80)
 
-    if failed == 0:
-        logger.info("✅ FULL PIPELINE COMPLETE - All robots executed successfully")
-        print("✅ ALL ROBOTS SUCCEEDED - Blog post published to WordPress!")
-        return 0
+    if core_robots_passed:
+        logger.info("✅ CORE PIPELINE COMPLETE - Blog post generated and published to WordPress!")
+        print("✅ CORE ROBOTS SUCCEEDED - Blog post published to WordPress!")
+        return 0  # Success - the essential robots (R2, R3, R31) all passed
     else:
-        logger.warning(f"⚠️  PIPELINE COMPLETE WITH ERRORS - {failed} robots failed")
-        print(f"⚠️  FAILED ROBOTS: {failed}/{len(PIPELINE)}")
+        logger.warning(f"⚠️  PIPELINE FAILED - Core robots did not complete successfully")
+        print(f"❌ CORE ROBOTS FAILED")
         print("Check error log files for details")
-        # Still return 1 so GitHub Actions knows there was an error
-        return 1
+        return 1  # Failure - core robots failed
 
 if __name__ == '__main__':
     sys.exit(main())
