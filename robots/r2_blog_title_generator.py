@@ -7,7 +7,7 @@ Output: 5 title variations (best selected for next phase)
 Frequency: Every 6 hours
 Dependencies: Requires R13 to populate trending_keywords table + topic_rotation table
 
-Provider Chain: Groq → Gemini → OpenAI
+Provider Chain: Groq → Gemini → Cohere → OpenAI
 This implementation removes all hardcoded model assumptions and automatically falls back
 through providers based on actual availability and successful API calls.
 """
@@ -694,30 +694,54 @@ Target audience: Adults of all ages and genders interested in health & fitness""
         return scored_titles
 
     def save_titles_to_db(self, conn, titles_data, topic):
-        """Save generated titles to database"""
+        """Save generated titles to database with graceful fallback for schema variations"""
         try:
             cursor = conn.cursor()
-
             keywords_str = ",".join([k['keyword'] for k in self.trending_keywords[:5]])
 
             for title_data in titles_data:
-                query = """
+                # Try to insert WITH provider column first (newer schema)
+                query_with_provider = """
                     INSERT INTO blog_titles (title, topic, keywords, created_at, ctr_score, provider)
                     VALUES (%s, %s, %s, NOW(), %s, %s)
                 """
-                cursor.execute(query, (
-                    title_data['title'],
-                    topic['topic_name'],
-                    keywords_str,
-                    title_data['score'] / 100.0,
-                    self.provider_used
-                ))
+
+                try:
+                    cursor.execute(query_with_provider, (
+                        title_data['title'],
+                        topic['topic_name'],
+                        keywords_str,
+                        title_data['score'] / 100.0,
+                        self.provider_used
+                    ))
+                except mysql.connector.Error as e:
+                    # If provider column doesn't exist, retry without it (legacy schema)
+                    if "Unknown column" in str(e) and "provider" in str(e):
+                        logger.warning(f"Provider column not found in schema, retrying without it...")
+                        query_without_provider = """
+                            INSERT INTO blog_titles (title, topic, keywords, created_at, ctr_score)
+                            VALUES (%s, %s, %s, NOW(), %s)
+                        """
+                        cursor.execute(query_without_provider, (
+                            title_data['title'],
+                            topic['topic_name'],
+                            keywords_str,
+                            title_data['score'] / 100.0
+                        ))
+                        logger.info(f"Successfully inserted without provider column")
+                    else:
+                        # Re-raise if it's a different error
+                        logger.error(f"Database error (not column mismatch): {str(e)}")
+                        raise
 
             conn.commit()
-            logger.info(f"Saved {len(titles_data)} titles to database (Provider: {self.provider_used})")
+            logger.info(f"✓ Saved {len(titles_data)} titles to database (Provider: {self.provider_used})")
             return True
+
         except Exception as e:
-            logger.error(f"Error saving titles: {str(e)}")
+            logger.error(f"Error saving titles to database: {str(e)}")
+            logger.error(f"Error Type: {type(e).__name__}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
         finally:
             cursor.close()
@@ -776,6 +800,9 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             saved = self.save_titles_to_db(conn, scored_titles, topic)
             if saved:
                 print(f"  ✓ {GREEN}Saved {len(scored_titles)} titles to blog_titles table (Provider: {self.provider_used}){RESET}\n")
+            else:
+                print(f"  {RED}✗ Failed to save titles to database{RESET}\n")
+                return False
 
             # Summary
             print(f"{'='*70}")
@@ -792,6 +819,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
         finally:
             conn.close()
