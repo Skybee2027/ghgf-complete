@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS retrofit_log (
     UNIQUE KEY unique_retrofit (blog_id, status)  -- One retrofit per post
 );
 
-CREATE INDEX idx_retrofit_status ON retrofit_log(status);
-CREATE INDEX idx_retrofit_blog ON retrofit_log(blog_id);
-CREATE INDEX idx_retrofit_completed ON retrofit_log(completed_at);
+CREATE INDEX IF NOT EXISTS idx_retrofit_status ON retrofit_log(status);
+CREATE INDEX IF NOT EXISTS idx_retrofit_blog ON retrofit_log(blog_id);
+CREATE INDEX IF NOT EXISTS idx_retrofit_completed ON retrofit_log(completed_at);
 
 -- ============================================================================
 -- 2. RETROFIT BATCH TRACKING
@@ -47,8 +47,8 @@ CREATE TABLE IF NOT EXISTS retrofit_batches (
     UNIQUE KEY unique_batch (batch_number)
 );
 
-CREATE INDEX idx_batch_status ON retrofit_batches(status);
-CREATE INDEX idx_batch_time ON retrofit_batches(start_time);
+CREATE INDEX IF NOT EXISTS idx_batch_status ON retrofit_batches(status);
+CREATE INDEX IF NOT EXISTS idx_batch_time ON retrofit_batches(start_time);
 
 -- ============================================================================
 -- 3. RETROFIT STATISTICS & ANALYTICS
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS retrofit_analytics (
     UNIQUE KEY unique_date (date_recorded)
 );
 
-CREATE INDEX idx_analytics_date ON retrofit_analytics(date_recorded);
+CREATE INDEX IF NOT EXISTS idx_analytics_date ON retrofit_analytics(date_recorded);
 
 -- ============================================================================
 -- 4. BLOG POST RETROFIT METADATA (extends blog_posts)
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS retrofit_affiliates (
     FOREIGN KEY (affiliate_product_id) REFERENCES affiliate_products(id)
 );
 
-CREATE INDEX idx_retrofit_affiliates_blog ON retrofit_affiliates(blog_id);
+CREATE INDEX IF NOT EXISTS idx_retrofit_affiliates_blog ON retrofit_affiliates(blog_id);
 
 -- ============================================================================
 -- 6. DIGITAL PRODUCT RETROFIT TRACKING
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS retrofit_digital_products (
     FOREIGN KEY (blog_id) REFERENCES blog_posts(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_retrofit_products_blog ON retrofit_digital_products(blog_id);
+CREATE INDEX IF NOT EXISTS idx_retrofit_products_blog ON retrofit_digital_products(blog_id);
 
 -- ============================================================================
 -- 7. RETROFIT ERROR TRACKING
@@ -144,8 +144,8 @@ CREATE TABLE IF NOT EXISTS retrofit_errors (
     FOREIGN KEY (blog_id) REFERENCES blog_posts(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_retrofit_errors_status ON retrofit_errors(status);
-CREATE INDEX idx_retrofit_errors_blog ON retrofit_errors(blog_id);
+CREATE INDEX IF NOT EXISTS idx_retrofit_errors_status ON retrofit_errors(status);
+CREATE INDEX IF NOT EXISTS idx_retrofit_errors_blog ON retrofit_errors(blog_id);
 
 -- ============================================================================
 -- 8. INITIAL DATA & PROCEDURES
