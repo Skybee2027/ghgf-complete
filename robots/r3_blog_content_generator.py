@@ -34,7 +34,7 @@ class BlogContentGenerator:
         """Initialize content generator"""
         self.groq_key = os.getenv("GROQ_API_KEY")
         self.google_key = os.getenv("GOOGLE_API_KEY")
-        self.groq_model = os.getenv("GROQ_MODEL")
+        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
         self.gemini_model = os.getenv("GEMINI_MODEL")
 
         if not self.groq_key:
@@ -152,22 +152,14 @@ Keywords to naturally include: {keywords_str}
 
 Return ONLY the HTML content, no explanations."""
 
-            # Use GROQ_MODEL env var if set, otherwise omit model parameter
-            if self.groq_model:
-                logger.info(f"Calling Groq API with configured model: {self.groq_model}")
-                response = client.chat.completions.create(
-                    model=self.groq_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=2000,
-                    temperature=0.7
-                )
-            else:
-                logger.info("Calling Groq API with default model")
-                response = client.chat.completions.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=2000,
-                    temperature=0.7
-                )
+            # Groq REQUIRES model parameter - use env var or default
+            logger.info(f"Calling Groq API with model: {self.groq_model}")
+            response = client.chat.completions.create(
+                model=self.groq_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.7
+            )
 
             if response.choices and response.choices[0].message.content:
                 content = response.choices[0].message.content.strip()
@@ -198,9 +190,9 @@ Include: introduction, problem, solution, benefits, buying guide, conclusion
 Format in HTML with <h2>, <h3>, <p>, <ul>, <li> tags
 Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
 
-            # Use GEMINI_MODEL env var if set, otherwise use default
+            # Gemini model is optional - use env var if set, otherwise omit
             if self.gemini_model:
-                logger.info(f"Calling Google Gemini API with configured model: {self.gemini_model}")
+                logger.info(f"Calling Google Gemini API with model: {self.gemini_model}")
                 model = genai.GenerativeModel(self.gemini_model)
             else:
                 logger.info("Calling Google Gemini API with default model")
