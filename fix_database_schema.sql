@@ -125,8 +125,8 @@ CREATE TABLE IF NOT EXISTS email_campaigns (
     blog_post_id INT NOT NULL,
     subject_line VARCHAR(255),
     email_body LONGTEXT,
-    scheduled_date TIMESTAMP,
-    sent_date TIMESTAMP,
+    scheduled_date TIMESTAMP NULL,
+    sent_date TIMESTAMP NULL,
     open_rate DECIMAL(5,2) DEFAULT 0,
     click_rate DECIMAL(5,2) DEFAULT 0,
     status ENUM('draft', 'scheduled', 'sent') DEFAULT 'draft',
@@ -136,8 +136,8 @@ CREATE TABLE IF NOT EXISTS email_campaigns (
 CREATE TABLE IF NOT EXISTS email_scheduler (
     id INT PRIMARY KEY AUTO_INCREMENT,
     email_campaign_id INT NOT NULL,
-    scheduled_send_time TIMESTAMP,
-    actual_send_time TIMESTAMP,
+    scheduled_send_time TIMESTAMP NULL,
+    actual_send_time TIMESTAMP NULL,
     delivery_status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
     retry_count INT DEFAULT 0,
     FOREIGN KEY (email_campaign_id) REFERENCES email_campaigns(id)
@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS plagiarism_recheck (
     original_plagiarism_score DECIMAL(5,2),
     recheck_plagiarism_score DECIMAL(5,2),
     recheck_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('passed', 'failed', 'needs_revision') DEFAULT 'pending',
+    status ENUM('pending', 'passed', 'failed', 'needs_revision') DEFAULT 'pending',
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
