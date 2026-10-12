@@ -7,7 +7,7 @@ ALTER TABLE blog_posts RENAME TO blog_posts_backup;
 DROP TABLE IF EXISTS trending_keywords_backup;
 ALTER TABLE trending_keywords RENAME TO trending_keywords_backup;
 
-CREATE TABLE topic_rotation (
+CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_name VARCHAR(255) NOT NULL UNIQUE,
     cycle_count INT DEFAULT 0,
@@ -17,7 +17,7 @@ CREATE TABLE topic_rotation (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE blog_titles (
+CREATE TABLE IF NOT EXISTS blog_titles (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_id INT NOT NULL,
     title VARCHAR(500) NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE blog_titles (
     FOREIGN KEY (topic_id) REFERENCES topic_rotation(id)
 );
 
-CREATE TABLE blog_posts (
+CREATE TABLE IF NOT EXISTS blog_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title_id INT NOT NULL,
     topic_id INT NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE blog_posts (
     FOREIGN KEY (topic_id) REFERENCES topic_rotation(id)
 );
 
-CREATE TABLE trending_keywords (
+CREATE TABLE IF NOT EXISTS trending_keywords (
     id INT PRIMARY KEY AUTO_INCREMENT,
     keyword VARCHAR(255) NOT NULL UNIQUE,
     topic VARCHAR(255) NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE trending_keywords (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE plagiarism_checks (
+CREATE TABLE IF NOT EXISTS plagiarism_checks (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     plagiarism_percentage DECIMAL(5,2) DEFAULT 0,
@@ -58,7 +58,7 @@ CREATE TABLE plagiarism_checks (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE ai_detection_results (
+CREATE TABLE IF NOT EXISTS ai_detection_results (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     ai_score DECIMAL(5,2) DEFAULT 0,
@@ -68,7 +68,7 @@ CREATE TABLE ai_detection_results (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE keyword_optimization (
+CREATE TABLE IF NOT EXISTS keyword_optimization (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     keyword VARCHAR(255) NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE keyword_optimization (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE image_metadata (
+CREATE TABLE IF NOT EXISTS image_metadata (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     image_url VARCHAR(500),
@@ -89,7 +89,7 @@ CREATE TABLE image_metadata (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE image_alt_text (
+CREATE TABLE IF NOT EXISTS image_alt_text (
     id INT PRIMARY KEY AUTO_INCREMENT,
     image_metadata_id INT NOT NULL,
     alt_text VARCHAR(500),
@@ -98,7 +98,7 @@ CREATE TABLE image_alt_text (
     FOREIGN KEY (image_metadata_id) REFERENCES image_metadata(id)
 );
 
-CREATE TABLE qa_verification (
+CREATE TABLE IF NOT EXISTS qa_verification (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     format_check BOOLEAN DEFAULT FALSE,
@@ -109,7 +109,7 @@ CREATE TABLE qa_verification (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE social_media_posts (
+CREATE TABLE IF NOT EXISTS social_media_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     platform VARCHAR(50),
@@ -120,7 +120,7 @@ CREATE TABLE social_media_posts (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE email_campaigns (
+CREATE TABLE IF NOT EXISTS email_campaigns (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     subject_line VARCHAR(255),
@@ -133,7 +133,7 @@ CREATE TABLE email_campaigns (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE email_scheduler (
+CREATE TABLE IF NOT EXISTS email_scheduler (
     id INT PRIMARY KEY AUTO_INCREMENT,
     email_campaign_id INT NOT NULL,
     scheduled_send_time TIMESTAMP,
@@ -143,7 +143,7 @@ CREATE TABLE email_scheduler (
     FOREIGN KEY (email_campaign_id) REFERENCES email_campaigns(id)
 );
 
-CREATE TABLE analytics_events (
+CREATE TABLE IF NOT EXISTS analytics_events (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     event_type VARCHAR(100),
@@ -154,7 +154,7 @@ CREATE TABLE analytics_events (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE headline_testing (
+CREATE TABLE IF NOT EXISTS headline_testing (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     headline_variant_a VARCHAR(500),
@@ -166,7 +166,7 @@ CREATE TABLE headline_testing (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE product_research (
+CREATE TABLE IF NOT EXISTS product_research (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     product_name VARCHAR(255),
@@ -177,7 +177,7 @@ CREATE TABLE product_research (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE affiliate_links (
+CREATE TABLE IF NOT EXISTS affiliate_links (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     affiliate_url VARCHAR(500),
@@ -190,7 +190,7 @@ CREATE TABLE affiliate_links (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE wordpress_posts (
+CREATE TABLE IF NOT EXISTS wordpress_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     wordpress_post_id VARCHAR(100),
@@ -200,7 +200,7 @@ CREATE TABLE wordpress_posts (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE social_distribution (
+CREATE TABLE IF NOT EXISTS social_distribution (
     id INT PRIMARY KEY AUTO_INCREMENT,
     wordpress_post_id INT NOT NULL,
     facebook_url VARCHAR(500),
@@ -212,7 +212,7 @@ CREATE TABLE social_distribution (
     FOREIGN KEY (wordpress_post_id) REFERENCES wordpress_posts(id)
 );
 
-CREATE TABLE social_engagement (
+CREATE TABLE IF NOT EXISTS social_engagement (
     id INT PRIMARY KEY AUTO_INCREMENT,
     social_distribution_id INT NOT NULL,
     platform VARCHAR(50),
@@ -225,7 +225,7 @@ CREATE TABLE social_engagement (
     FOREIGN KEY (social_distribution_id) REFERENCES social_distribution(id)
 );
 
-CREATE TABLE comment_moderation (
+CREATE TABLE IF NOT EXISTS comment_moderation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     wordpress_post_id INT NOT NULL,
     comment_text LONGTEXT,
@@ -236,7 +236,7 @@ CREATE TABLE comment_moderation (
     FOREIGN KEY (wordpress_post_id) REFERENCES wordpress_posts(id)
 );
 
-CREATE TABLE content_refresh (
+CREATE TABLE IF NOT EXISTS content_refresh (
     id INT PRIMARY KEY AUTO_INCREMENT,
     original_post_id INT NOT NULL,
     refreshed_content LONGTEXT,
@@ -245,7 +245,7 @@ CREATE TABLE content_refresh (
     FOREIGN KEY (original_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE content_revalidation (
+CREATE TABLE IF NOT EXISTS content_revalidation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     revalidation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -254,7 +254,7 @@ CREATE TABLE content_revalidation (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE plagiarism_recheck (
+CREATE TABLE IF NOT EXISTS plagiarism_recheck (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     original_plagiarism_score DECIMAL(5,2),
@@ -264,7 +264,7 @@ CREATE TABLE plagiarism_recheck (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE final_qa_verification (
+CREATE TABLE IF NOT EXISTS final_qa_verification (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     final_check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -273,7 +273,7 @@ CREATE TABLE final_qa_verification (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE static_links (
+CREATE TABLE IF NOT EXISTS static_links (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT NOT NULL,
     link_url VARCHAR(500),
@@ -283,7 +283,7 @@ CREATE TABLE static_links (
     FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
 );
 
-CREATE TABLE system_error_log (
+CREATE TABLE IF NOT EXISTS system_error_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
     error_type VARCHAR(100),
     error_message LONGTEXT,
@@ -294,7 +294,7 @@ CREATE TABLE system_error_log (
     error_handler_needed BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE system_health_metrics (
+CREATE TABLE IF NOT EXISTS system_health_metrics (
     id INT PRIMARY KEY AUTO_INCREMENT,
     metric_name VARCHAR(100),
     metric_value DECIMAL(10,2),
@@ -302,7 +302,7 @@ CREATE TABLE system_health_metrics (
     threshold_exceeded BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE automated_rollback (
+CREATE TABLE IF NOT EXISTS automated_rollback (
     id INT PRIMARY KEY AUTO_INCREMENT,
     failed_operation VARCHAR(255),
     rollback_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -310,7 +310,7 @@ CREATE TABLE automated_rollback (
     affected_records INT DEFAULT 0
 );
 
-CREATE TABLE master_metrics (
+CREATE TABLE IF NOT EXISTS master_metrics (
     id INT PRIMARY KEY AUTO_INCREMENT,
     metric_date DATE,
     total_posts_generated INT DEFAULT 0,
@@ -434,9 +434,9 @@ INSERT INTO trending_keywords (keyword, topic, search_volume, competition_level,
 ('daily routines', 'Habit Building and Lifestyle', 42000, 'Medium', 8.2),
 ('lifestyle tips', 'Habit Building and Lifestyle', 38000, 'Medium', 7.9);
 
-CREATE INDEX idx_blog_posts_topic ON blog_posts(topic_id);
-CREATE INDEX idx_blog_posts_status ON blog_posts(status);
-CREATE INDEX idx_trending_keywords_topic ON trending_keywords(topic);
-CREATE INDEX idx_social_media_posts_platform ON social_media_posts(platform);
-CREATE INDEX idx_analytics_events_blog_post ON analytics_events(blog_post_id);
-CREATE INDEX idx_wordpress_posts_status ON wordpress_posts(status);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_topic ON blog_posts(topic_id);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
+CREATE INDEX IF NOT EXISTS idx_trending_keywords_topic ON trending_keywords(topic);
+CREATE INDEX IF NOT EXISTS idx_social_media_posts_platform ON social_media_posts(platform);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_blog_post ON analytics_events(blog_post_id);
+CREATE INDEX IF NOT EXISTS idx_wordpress_posts_status ON wordpress_posts(status);
