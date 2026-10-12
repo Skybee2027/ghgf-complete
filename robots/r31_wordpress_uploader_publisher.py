@@ -54,8 +54,15 @@ class WordPressUploaderPublisher:
 
         # Log credentials for debugging
         logger.info(f"WordPress Config: URL={self.wp_url}, User={self.wp_user}, Password={'SET' if self.wp_password else 'EMPTY'}")
+        print(f"\n🔧 WordPress Configuration:")
+        print(f"   URL: {self.wp_url}")
+        print(f"   User: {self.wp_user}")
+        print(f"   Password: {'✅ SET' if self.wp_password else '❌ EMPTY'}")
+        print(f"   API Base: {self.wp_api_base}\n")
+
         if not self.wp_password:
             logger.error("CRITICAL: WORDPRESS_PASSWORD is empty! Posts cannot be published.")
+            print(f"   {RED}❌ CRITICAL: WORDPRESS_PASSWORD is EMPTY!{RESET}\n")
 
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
@@ -267,9 +274,41 @@ class WordPressUploaderPublisher:
 
         try:
             print(f"{BOLD}Step 1: Finding Posts Ready to Publish{RESET}")
+            print(f"  Searching for posts where:")
+            print(f"    - status = 'draft'")
+            print(f"    - ready_for_wordpress = TRUE")
+            print(f"    - final_qa_passed = TRUE")
+            print(f"    - wordpress_post_id IS NULL\n")
+
             posts = self.get_posts_ready_to_publish(conn)
             if not posts:
-                print(f"  No posts ready for WordPress publishing\n")
+                print(f"  ❌ No posts ready for WordPress publishing\n")
+
+                # Debug: Check all posts in database
+                try:
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute("SELECT COUNT(*) as total FROM blog_posts")
+                    total = cursor.fetchone()['total']
+
+                    cursor.execute("SELECT COUNT(*) as draft FROM blog_posts WHERE status='draft'")
+                    draft = cursor.fetchone()['draft']
+
+                    cursor.execute("SELECT COUNT(*) as ready FROM blog_posts WHERE ready_for_wordpress=TRUE")
+                    ready = cursor.fetchone()['ready']
+
+                    cursor.execute("SELECT COUNT(*) as qa FROM blog_posts WHERE final_qa_passed=TRUE")
+                    qa_passed = cursor.fetchone()['qa']
+
+                    cursor.close()
+
+                    print(f"  DEBUG INFO:")
+                    print(f"    Total posts in DB: {total}")
+                    print(f"    Draft status: {draft}")
+                    print(f"    Ready for WordPress: {ready}")
+                    print(f"    QA Passed: {qa_passed}\n")
+                except Exception as e:
+                    print(f"    (Could not get debug info: {str(e)})\n")
+
                 print(f"{'='*70}")
                 print(f"{BOLD}SUMMARY{RESET}")
                 print(f"  Posts Published: 0")
