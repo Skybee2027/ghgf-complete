@@ -52,7 +52,15 @@ class ImageFinder:
     def get_current_blog_topic(self, conn):
         try:
             cursor = conn.cursor(dictionary=True)
-            query = "SELECT topic FROM blog_posts WHERE status = 'draft' ORDER BY created_at DESC LIMIT 1"
+            # Try to get topic name from topics table if topic_id is stored
+            query = """
+                SELECT COALESCE(bp.topic, t.name) as topic
+                FROM blog_posts bp
+                LEFT JOIN topics t ON bp.topic_id = t.id
+                WHERE bp.status = 'draft'
+                ORDER BY bp.created_at DESC
+                LIMIT 1
+            """
             cursor.execute(query)
             result = cursor.fetchone()
             cursor.close()

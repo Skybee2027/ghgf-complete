@@ -387,33 +387,41 @@ Return ONLY the HTML content, no explanations."""
     def save_content_to_db(self, conn, content, title_data):
         """Save generated content to blog_posts table"""
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
 
-            # Get a default topic_id from topic_rotation table
+            # Get a default topic_id and topic name from topic_rotation and topics tables
             topic_id = None
+            topic_name = None
             try:
-                cursor.execute("SELECT id FROM topic_rotation LIMIT 1")
+                cursor.execute("""
+                    SELECT tr.id as topic_id, t.name as topic_name
+                    FROM topic_rotation tr
+                    JOIN topics t ON tr.topic_id = t.id
+                    LIMIT 1
+                """)
                 topic_result = cursor.fetchone()
                 if topic_result:
-                    topic_id = topic_result[0]
-                    logger.info(f"Using default topic_id: {topic_id}")
+                    topic_id = topic_result['topic_id']
+                    topic_name = topic_result['topic_name']
+                    logger.info(f"Using topic_id: {topic_id}, topic: {topic_name}")
             except Exception as e:
                 logger.warning(f"Could not fetch default topic: {str(e)}")
 
             # If no topic found, return error
-            if not topic_id:
+            if not topic_id or not topic_name:
                 logger.error("No default topic found in topic_rotation table")
                 return None
 
             query = """
-                INSERT INTO blog_posts (title_id, title, content, topic_id, status, ready_for_wordpress, final_qa_passed, version, created_at)
-                VALUES (%s, %s, %s, %s, 'draft', FALSE, FALSE, 1, NOW())
+                INSERT INTO blog_posts (title_id, title, content, topic_id, topic, status, ready_for_wordpress, final_qa_passed, version, created_at)
+                VALUES (%s, %s, %s, %s, %s, 'draft', FALSE, FALSE, 1, NOW())
             """
             cursor.execute(query, (
                 title_data['id'],
                 title_data['title'],
                 content,
-                topic_id  # Use default topic_id from topic_rotation
+                topic_id,  # Use default topic_id from topic_rotation
+                topic_name  # Also store the topic name
             ))
 
             blog_id = cursor.lastrowid

@@ -65,9 +65,9 @@ class HeadlineTester:
         try:
             cursor = conn.cursor(dictionary=True)
 
-            # Get latest draft blog
+            # Get latest draft blog with topic_id
             blog_query = """
-                SELECT id, title, topic
+                SELECT id, title, topic, topic_id
                 FROM blog_posts
                 WHERE status = 'draft'
                 ORDER BY created_at DESC
@@ -80,15 +80,27 @@ class HeadlineTester:
                 cursor.close()
                 return None, []
 
-            # Get headline variations for this blog topic
+            # Get headline variations for this blog's topic_id
             headlines_query = """
-                SELECT id, title, topic, ctr_score, used
+                SELECT id, title, ctr_score, used
                 FROM blog_titles
-                WHERE topic = %s AND used = FALSE
+                WHERE topic_id = %s AND used = FALSE
                 ORDER BY ctr_score DESC
                 LIMIT 10
             """
-            cursor.execute(headlines_query, (blog['topic'],))
+            topic_id = blog.get('topic_id')
+            if not topic_id:
+                # Fallback: Get any recent headline variations
+                headlines_query = """
+                    SELECT id, title, ctr_score, used
+                    FROM blog_titles
+                    WHERE used = FALSE
+                    ORDER BY ctr_score DESC
+                    LIMIT 10
+                """
+                cursor.execute(headlines_query)
+            else:
+                cursor.execute(headlines_query, (topic_id,))
             headlines = cursor.fetchall()
             cursor.close()
 

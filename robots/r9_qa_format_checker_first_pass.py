@@ -161,7 +161,7 @@ class QAFormatChecker:
             cursor.close()
 
             if not images:
-                return False, ["No images found for blog"]
+                return False, ["No images found for blog"], 0
 
             issues = []
             for img in images:

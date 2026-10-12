@@ -92,7 +92,7 @@ jobs:
       run: |
         apt-get update && apt-get install -y mysql-client dnsutils
         python -m pip install --upgrade pip
-        pip install groq google-generativeai cohere openai mysql-connector-python requests
+        pip install groq google-generativeai cohere openai mysql-connector-python requests reportlab pillow
       continue-on-error: true
 
     - name: Diagnostic - Test database connectivity
@@ -183,6 +183,15 @@ jobs:
             echo "✓ Loaded R0_Migration_R2_RequiredColumns.sql"
           else
             echo "❌ ERROR loading R0_Migration_R2_RequiredColumns.sql"
+            exit 1
+          fi
+        fi
+
+        if [ -f database/R0_Migration_MissingColumns.sql ]; then
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_MissingColumns.sql 2>&1; then
+            echo "✓ Loaded R0_Migration_MissingColumns.sql"
+          else
+            echo "❌ ERROR loading R0_Migration_MissingColumns.sql"
             exit 1
           fi
         fi
