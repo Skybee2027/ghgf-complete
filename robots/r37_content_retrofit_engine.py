@@ -36,9 +36,9 @@ class ContentRetrofitEngine:
         self.cohere_api_key = os.getenv('COHERE_API_KEY', '')
         self.google_api_key = os.getenv('GOOGLE_API_KEY', '')
 
-        # Model configuration - from environment variables only
-        self.groq_model = os.getenv('GROQ_MODEL', 'mixtral-8x7b-32768')
-        self.openai_model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        # Model configuration - from environment variables only (no hardcoded defaults)
+        self.groq_model = os.getenv('GROQ_MODEL')
+        self.openai_model = os.getenv('OPENAI_MODEL')
 
         # Affiliate APIs
         self.cj_api_key = os.getenv('CJ_API_KEY', '')

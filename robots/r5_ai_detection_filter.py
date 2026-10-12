@@ -38,7 +38,7 @@ class AIDetectionFilter:
         }
         self.ai_threshold = 0.70  # 70%
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
+        self.groq_model = os.getenv("GROQ_MODEL")  # Flexible: accepts any model from environment
         self.max_retries = 3
         self.current_attempt = 0
 

@@ -36,7 +36,7 @@ class AltTextGenerator:
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
         self.groq_key = os.getenv("GROQ_API_KEY", "")
-        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
+        self.groq_model = os.getenv("GROQ_MODEL")  # Flexible: accepts any model from environment
         self.alt_texts_generated = 0
 
     def print_header(self, title):

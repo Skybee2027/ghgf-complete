@@ -49,18 +49,18 @@ class BlogTitleGenerator:
         self.cohere_key = os.getenv("COHERE_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
 
-        # Model names - HARDCODED DEFAULTS (no environment variable dependency)
-        # These are tested and known to work with each provider
-        self.groq_model = "mixtral-8x7b-32768"  # Groq's fast, reliable model
-        self.gemini_model = "gemini-pro"        # Gemini's default model
-        self.cohere_model = "command-r-plus"    # Cohere's latest model
-        self.openai_model = "gpt-3.5-turbo"     # OpenAI's fast model
+        # Model names - FROM ENVIRONMENT VARIABLES (flexible, accepts any model)
+        # Users can set these via GitHub Secrets or environment to override provider defaults
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
 
-        logger.debug(f"Model configuration (hardcoded defaults - no env dependency):")
-        logger.debug(f"  GROQ_MODEL={self.groq_model}")
-        logger.debug(f"  GEMINI_MODEL={self.gemini_model}")
-        logger.debug(f"  COHERE_MODEL={self.cohere_model}")
-        logger.debug(f"  OPENAI_MODEL={self.openai_model}")
+        logger.debug(f"Model configuration (environment variable driven):")
+        logger.debug(f"  GROQ_MODEL={self.groq_model if self.groq_model else '(provider default)'}")
+        logger.debug(f"  GEMINI_MODEL={self.gemini_model if self.gemini_model else '(provider default)'}")
+        logger.debug(f"  COHERE_MODEL={self.cohere_model if self.cohere_model else '(provider default)'}")
+        logger.debug(f"  OPENAI_MODEL={self.openai_model if self.openai_model else '(provider default)'}")
 
         if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
             logger.error("CRITICAL: No API keys found!")
@@ -347,7 +347,10 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.gemini_model if self.gemini_model else os.getenv("GEMINI_MODEL_FALLBACK", "gemini-pro")
+            model_name = self.gemini_model if self.gemini_model else os.getenv("GEMINI_MODEL_FALLBACK")
+            if not model_name:
+                logger.error("No Gemini model configured - set GEMINI_MODEL or GEMINI_MODEL_FALLBACK")
+                return None
             logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
@@ -429,7 +432,10 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.cohere_model if self.cohere_model else os.getenv("COHERE_MODEL_FALLBACK", "command-r-plus")
+            model_name = self.cohere_model if self.cohere_model else os.getenv("COHERE_MODEL_FALLBACK")
+            if not model_name:
+                logger.error("No Cohere model configured - set COHERE_MODEL or COHERE_MODEL_FALLBACK")
+                return None
             logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Max tokens: 300")
 

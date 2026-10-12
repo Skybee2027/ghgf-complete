@@ -38,11 +38,11 @@ class BloggingRobot:
         self.pixabay_key = os.getenv("PIXABAY_API_KEY")
         self.cj_key = os.getenv("CJ_API_KEY")
 
-        # Model configuration (from environment variables only)
-        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
-        self.openai_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")  # Default to gpt-3.5-turbo if not set
+        # Model configuration (from environment variables - no hardcoded defaults)
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
         self.gemini_model = os.getenv("GEMINI_MODEL")
-        self.cohere_model = os.getenv("COHERE_MODEL", "command-r-plus")  # Default to command-r-plus if not set
+        self.cohere_model = os.getenv("COHERE_MODEL")
 
         self.topics = [
             "fitness", "health", "nutrition", "workout", "diet",
@@ -81,11 +81,16 @@ class BloggingRobot:
             from groq import Groq
             client = Groq(api_key=self.groq_key)
 
-            # Use environment-configured model, with fallback chain from env var
-            models_to_try = os.getenv("GROQ_MODELS_FALLBACK", "mixtral-8x7b-32768,llama-3.1-70b-versatile,llama2-70b-4096,qwen-3.8-27b").split(",")
-            # Always try the configured model first
-            if self.groq_model and self.groq_model not in models_to_try:
-                models_to_try.insert(0, self.groq_model)
+            # Use environment-configured model only (no hardcoded defaults)
+            # Users can set GROQ_MODEL or GROQ_MODELS_FALLBACK in environment for flexibility
+            if self.groq_model:
+                models_to_try = [self.groq_model]
+            else:
+                models_fallback = os.getenv("GROQ_MODELS_FALLBACK", "")
+                models_to_try = models_fallback.split(",") if models_fallback else []
+
+            if not models_to_try:
+                return None  # No model configured
 
             for model in models_to_try:
                 try:
