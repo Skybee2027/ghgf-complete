@@ -89,7 +89,7 @@ jobs:
       run: |
         echo "Waiting for MySQL to be ready..."
         for i in {1..30}; do
-          if mysql -h localhost -u root -p"root" -e "SELECT 1" 2>/dev/null; then
+          if mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" 2>/dev/null; then
             echo "MySQL is ready!"
             break
           fi
@@ -98,13 +98,13 @@ jobs:
         done
 
         echo "Creating database and loading schema..."
-        mysql -h localhost -u root -p"root" -e "CREATE DATABASE IF NOT EXISTS ghgf_blogging;"
+        mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
         if [ -f database/R37_Database_Schema.sql ]; then
-          mysql -h localhost -u root -p"root" ghgf_blogging < database/R37_Database_Schema.sql
+          mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R37_Database_Schema.sql
           echo "✓ Loaded R37_Database_Schema.sql"
         fi
         if [ -f database/R14b_Database_Schema.sql ]; then
-          mysql -h localhost -u root -p"root" ghgf_blogging < database/R14b_Database_Schema.sql
+          mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R14b_Database_Schema.sql
           echo "✓ Loaded R14b_Database_Schema.sql"
         fi
       continue-on-error: true
