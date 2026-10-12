@@ -3,6 +3,7 @@ SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_name VARCHAR(255) NOT NULL UNIQUE,
+    status VARCHAR(50) DEFAULT 'active',
     cycle_count INT DEFAULT 0,
     sequence_number INT NOT NULL,
     last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -13,6 +14,7 @@ CREATE TABLE IF NOT EXISTS topic_rotation (
 CREATE TABLE IF NOT EXISTS blog_titles (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_id INT NOT NULL,
+    topic VARCHAR(255),
     title VARCHAR(500) NOT NULL,
     generated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     used_status ENUM('pending', 'used', 'rejected') DEFAULT 'pending'
@@ -22,6 +24,8 @@ CREATE TABLE IF NOT EXISTS blog_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title_id INT,
     topic_id INT,
+    title VARCHAR(500),
+    topic VARCHAR(255),
     content LONGTEXT,
     status ENUM('draft', 'pending', 'published', 'failed') DEFAULT 'draft',
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -290,25 +294,25 @@ CREATE TABLE IF NOT EXISTS master_metrics (
     collection_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT IGNORE INTO topic_rotation (topic_name, sequence_number, is_active) VALUES
-('Health and Fitness', 1, TRUE),
-('Weight Loss', 2, FALSE),
-('Muscle Building', 3, FALSE),
-('Nutrition and Diet', 4, FALSE),
-('Cardiovascular Health', 5, FALSE),
-('Mental Health and Wellness', 6, FALSE),
-('Yoga and Flexibility', 7, FALSE),
-('High Intensity Training', 8, FALSE),
-('Sleep and Recovery', 9, FALSE),
-('Joint and Bone Health', 10, FALSE),
-('Immune System Boosting', 11, FALSE),
-('Energy and Stamina', 12, FALSE),
-('Stress Management', 13, FALSE),
-('Aging and Longevity', 14, FALSE),
-('Sports Performance', 15, FALSE),
-('Home Fitness Solutions', 16, FALSE),
-('Supplement Guide', 17, FALSE),
-('Habit Building and Lifestyle', 18, FALSE);
+INSERT IGNORE INTO topic_rotation (topic_name, status, sequence_number, is_active) VALUES
+('Health and Fitness', 'active', 1, TRUE),
+('Weight Loss', 'inactive', 2, FALSE),
+('Muscle Building', 'inactive', 3, FALSE),
+('Nutrition and Diet', 'inactive', 4, FALSE),
+('Cardiovascular Health', 'inactive', 5, FALSE),
+('Mental Health and Wellness', 'inactive', 6, FALSE),
+('Yoga and Flexibility', 'inactive', 7, FALSE),
+('High Intensity Training', 'inactive', 8, FALSE),
+('Sleep and Recovery', 'inactive', 9, FALSE),
+('Joint and Bone Health', 'inactive', 10, FALSE),
+('Immune System Boosting', 'inactive', 11, FALSE),
+('Energy and Stamina', 'inactive', 12, FALSE),
+('Stress Management', 'inactive', 13, FALSE),
+('Aging and Longevity', 'inactive', 14, FALSE),
+('Sports Performance', 'inactive', 15, FALSE),
+('Home Fitness Solutions', 'inactive', 16, FALSE),
+('Supplement Guide', 'inactive', 17, FALSE),
+('Habit Building and Lifestyle', 'inactive', 18, FALSE);
 
 INSERT IGNORE INTO trending_keywords (keyword, topic, search_volume, competition_level, trend_score) VALUES
 ('health and fitness', 'Health and Fitness', 50000, 'High', 8.5),
