@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-R3: Blog Content Generator
+R3: Blog Content Generator (Multi-Provider Fallback)
 Purpose: Generate 800-1500 word blog posts with problem-solution-buying guide structure
 Input: Blog title (from R2), trending keywords (from R13), current topic
 Output: Complete blog post content with internal link placeholders
 Frequency: Every 6 hours (after R2 completes)
 Dependencies: R2 (provides title), R13 (provides keywords)
+
+Provider Chain: Groq → Gemini → Cohere → OpenAI
+ROBUST FALLBACK: If one provider fails, automatically tries next provider
 """
 
 import os
 import sys
 import mysql.connector
 from datetime import datetime
-from groq import Groq
 import logging
+import traceback
 
 # Setup logging
 logging.basicConfig(
@@ -31,17 +34,51 @@ BLUE = '\033[94m'
 
 class BlogContentGenerator:
     def __init__(self):
-        """Initialize content generator"""
+        """Initialize content generator with multi-provider API support"""
+        # Check available API keys - all optional since we have a fallback chain
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.gemini_key = os.getenv("GEMINI_API_KEY")  # Google Gemini API key
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.cohere_key = os.getenv("COHERE_API_KEY")
+        self.openai_key = os.getenv("OPENAI_API_KEY")
 
-        # Use environment variable driven models - flexible, accepts any model
+        # Model names - FROM ENVIRONMENT VARIABLES (flexible, accepts any model)
         self.groq_model = os.getenv("GROQ_MODEL")
         self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
 
-        if not self.groq_key:
-            logger.error("GROQ_API_KEY not set")
+        # Check that at least ONE API key is available
+        if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
+            logger.error("CRITICAL: No API keys found!")
+            logger.error("At least one of these must be set:")
+            logger.error("  - GROQ_API_KEY")
+            logger.error("  - GEMINI_API_KEY")
+            logger.error("  - COHERE_API_KEY")
+            logger.error("  - OPENAI_API_KEY")
             sys.exit(1)
+
+        # Log which providers are available
+        if self.groq_key:
+            logger.info("✓ GROQ_API_KEY is set")
+        else:
+            logger.warning("⚠ GROQ_API_KEY not set - will skip Groq provider")
+
+        if self.gemini_key:
+            logger.info("✓ GEMINI_API_KEY is set")
+        else:
+            logger.warning("⚠ GEMINI_API_KEY not set - will skip Gemini provider")
+
+        if self.cohere_key:
+            logger.info("✓ COHERE_API_KEY is set")
+        else:
+            logger.warning("⚠ COHERE_API_KEY not set - will skip Cohere provider")
+
+        if self.openai_key:
+            logger.info("✓ OPENAI_API_KEY is set")
+        else:
+            logger.warning("⚠ OPENAI_API_KEY not set - will skip OpenAI provider")
+
+        self.provider_used = None
 
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -119,14 +156,11 @@ class BlogContentGenerator:
             logger.error(f"Error getting keywords: {str(e)}")
             return []
 
-    def generate_content_groq(self, title, keywords, topic):
-        """Generate blog content using Groq"""
-        try:
-            client = Groq(api_key=self.groq_key)
+    def get_prompt(self, title, keywords, topic):
+        """Generate the shared prompt for all providers"""
+        keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
 
-            keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
-
-            prompt = f"""Write a comprehensive, engaging health/fitness blog post with the title: "{title}"
+        prompt = f"""Write a comprehensive, engaging health/fitness blog post with the title: "{title}"
 
 STRUCTURE (MUST follow this format):
 1. Introduction (150-200 words): Hook the reader, explain why this matters, mention the keywords naturally
@@ -153,8 +187,24 @@ Topic: {topic}
 Keywords to naturally include: {keywords_str}
 
 Return ONLY the HTML content, no explanations."""
+        return prompt
 
-            # Groq REQUIRES model parameter - use env var or default
+    def generate_content_groq(self, title, keywords, topic):
+        """Generate blog content using Groq"""
+        if not self.groq_key:
+            logger.debug("Groq API key not available, skipping Groq provider")
+            return None
+
+        try:
+            from groq import Groq
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING GROQ PROVIDER")
+            logger.info("=" * 70)
+
+            client = Groq(api_key=self.groq_key)
+            prompt = self.get_prompt(title, keywords, topic)
+
             logger.info(f"Calling Groq API with model: {self.groq_model}")
             response = client.chat.completions.create(
                 model=self.groq_model,
@@ -167,37 +217,41 @@ Return ONLY the HTML content, no explanations."""
                 content = response.choices[0].message.content.strip()
                 self.content_generated = True
                 self.content_length = len(content)
-                logger.info(f"Content generated: {self.content_length} characters")
+                self.provider_used = "Groq"
+                logger.info(f"✓ Groq succeeded: {self.content_length} characters")
                 return content
             else:
                 logger.error("Groq returned empty response")
                 return None
+        except ImportError:
+            logger.warning("Groq library not installed, skipping Groq provider")
+            return None
         except Exception as e:
-            logger.error(f"Groq API error: {str(e)}")
+            logger.error(f"GROQ PROVIDER FAILED: {type(e).__name__}: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return None
 
-    def generate_content_google(self, title, keywords, topic):
+    def generate_content_gemini(self, title, keywords, topic):
         """Fallback: Generate content using Google Gemini"""
+        if not self.gemini_key:
+            logger.debug("Gemini API key not available, skipping Gemini provider")
+            return None
+
         try:
             import google.generativeai as genai
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING GEMINI PROVIDER")
+            logger.info("=" * 70)
+
             genai.configure(api_key=self.gemini_key)
+            prompt = self.get_prompt(title, keywords, topic)
 
-            keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+            logger.info(f"Calling Google Gemini API with model: {self.gemini_model if self.gemini_model else '(default)'}")
 
-            prompt = f"""Write a comprehensive health blog post: "{title}"
-Topic: {topic}
-Keywords: {keywords_str}
-Length: 800-1500 words
-Include: introduction, problem, solution, benefits, buying guide, conclusion
-Format in HTML with <h2>, <h3>, <p>, <ul>, <li> tags
-Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
-
-            # Gemini model is optional - use env var if set, otherwise omit
             if self.gemini_model:
-                logger.info(f"Calling Google Gemini API with model: {self.gemini_model}")
                 model = genai.GenerativeModel(self.gemini_model)
             else:
-                logger.info("Calling Google Gemini API with default model")
                 model = genai.GenerativeModel()
 
             response = model.generate_content(prompt)
@@ -206,11 +260,102 @@ Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
                 content = response.text
                 self.content_generated = True
                 self.content_length = len(content)
-                logger.info(f"Content generated (Google): {self.content_length} characters")
+                self.provider_used = "Gemini"
+                logger.info(f"✓ Gemini succeeded: {self.content_length} characters")
                 return content
+            else:
+                logger.error("Gemini returned empty response")
+                return None
+        except ImportError:
+            logger.warning("Google Generative AI library not installed, skipping Gemini provider")
             return None
         except Exception as e:
-            logger.error(f"Google API error: {str(e)}")
+            logger.error(f"GEMINI PROVIDER FAILED: {type(e).__name__}: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return None
+
+    def generate_content_cohere(self, title, keywords, topic):
+        """Fallback: Generate content using Cohere"""
+        if not self.cohere_key:
+            logger.debug("Cohere API key not available, skipping Cohere provider")
+            return None
+
+        try:
+            import cohere
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING COHERE PROVIDER")
+            logger.info("=" * 70)
+
+            client = cohere.ClientV2(api_key=self.cohere_key)
+            prompt = self.get_prompt(title, keywords, topic)
+
+            logger.info(f"Calling Cohere API with model: {self.cohere_model}")
+            response = client.generate(
+                model=self.cohere_model,
+                prompt=prompt,
+                max_tokens=2000,
+                temperature=0.7
+            )
+
+            if response.text:
+                content = response.text
+                self.content_generated = True
+                self.content_length = len(content)
+                self.provider_used = "Cohere"
+                logger.info(f"✓ Cohere succeeded: {self.content_length} characters")
+                return content
+            else:
+                logger.error("Cohere returned empty response")
+                return None
+        except ImportError:
+            logger.warning("Cohere library not installed, skipping Cohere provider")
+            return None
+        except Exception as e:
+            logger.error(f"COHERE PROVIDER FAILED: {type(e).__name__}: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return None
+
+    def generate_content_openai(self, title, keywords, topic):
+        """Fallback: Generate content using OpenAI"""
+        if not self.openai_key:
+            logger.debug("OpenAI API key not available, skipping OpenAI provider")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            logger.info("=" * 70)
+            logger.info("ATTEMPTING OPENAI PROVIDER")
+            logger.info("=" * 70)
+
+            client = OpenAI(api_key=self.openai_key)
+            prompt = self.get_prompt(title, keywords, topic)
+
+            logger.info(f"Calling OpenAI API with model: {self.openai_model}")
+            response = client.chat.completions.create(
+                model=self.openai_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.7
+            )
+
+            if response.choices and response.choices[0].message.content:
+                content = response.choices[0].message.content
+                self.content_generated = True
+                self.content_length = len(content)
+                self.provider_used = "OpenAI"
+                logger.info(f"✓ OpenAI succeeded: {self.content_length} characters")
+                return content
+            else:
+                logger.error("OpenAI returned empty response")
+                return None
+        except ImportError:
+            logger.warning("OpenAI library not installed, skipping OpenAI provider")
+            return None
+        except Exception as e:
+            logger.error(f"OPENAI PROVIDER FAILED: {type(e).__name__}: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return None
 
     def validate_content(self, content):
@@ -322,19 +467,32 @@ Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
                     print(f"  • {kw['keyword']}")
             print()
 
-            # Step 3: Generate content using Groq
-            print(f"{BOLD}Step 3: Generating Blog Content (via Groq){RESET}")
+            # Step 3: Generate content using multi-provider fallback chain
+            print(f"{BOLD}Step 3: Generating Blog Content (Multi-Provider Fallback){RESET}")
+            content = None
+
+            # Try providers in order: Groq → Gemini → Cohere → OpenAI
+            logger.info("Starting multi-provider fallback chain...")
+
             content = self.generate_content_groq(title_data['title'], keywords, title_data['topic'])
 
             if not content:
-                logger.warning("Groq generation failed, trying Google Gemini...")
-                content = self.generate_content_google(title_data['title'], keywords, title_data['topic'])
+                logger.warning("Groq failed, attempting Gemini...")
+                content = self.generate_content_gemini(title_data['title'], keywords, title_data['topic'])
 
             if not content:
-                logger.error("Failed to generate content from all APIs")
+                logger.warning("Gemini failed, attempting Cohere...")
+                content = self.generate_content_cohere(title_data['title'], keywords, title_data['topic'])
+
+            if not content:
+                logger.warning("Cohere failed, attempting OpenAI...")
+                content = self.generate_content_openai(title_data['title'], keywords, title_data['topic'])
+
+            if not content:
+                logger.error("Failed to generate content from all providers (Groq, Gemini, Cohere, OpenAI)")
                 return False
 
-            print(f"  ✓ {GREEN}Content generated: {self.content_length} characters{RESET}\n")
+            print(f"  ✓ {GREEN}Content generated via {self.provider_used}: {self.content_length} characters{RESET}\n")
 
             # Step 4: Validate content
             print(f"{BOLD}Step 4: Validating Content Quality{RESET}")
