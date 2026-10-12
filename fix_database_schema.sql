@@ -98,317 +98,65 @@ CREATE TABLE IF NOT EXISTS keyword_optimization (
     blog_post_id INT,
     keyword VARCHAR(255),
     keyword_density DECIMAL(5,2),
-    placement_count INT DEFAULT 0,
-    optimization_status ENUM('pending', 'optimized', 'failed') DEFAULT 'pending'
+    optimization_score INT,
+    last_optimized TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS image_tracking (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    image_url VARCHAR(500),
-    alt_text VARCHAR(500),
-    title VARCHAR(255),
-    topic VARCHAR(255),
-    source VARCHAR(255),
-    used_date TIMESTAMP NULL,
-    expires_date DATE
-);
-
-CREATE TABLE IF NOT EXISTS image_alt_text (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    image_metadata_id INT,
-    alt_text VARCHAR(500),
-    generated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('pending', 'generated', 'approved') DEFAULT 'pending'
-);
-
-CREATE TABLE IF NOT EXISTS qa_verification (
+CREATE TABLE IF NOT EXISTS content_images (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT,
-    format_check BOOLEAN DEFAULT FALSE,
-    content_quality_score INT,
-    readability_score INT,
-    seo_score INT,
-    verification_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS final_qa_records (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    all_checks_passed BOOLEAN DEFAULT FALSE,
-    qa_data LONGTEXT,
-    verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    image_url VARCHAR(500),
+    alt_text TEXT,
+    image_source VARCHAR(100),
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS social_media_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
+    blog_post_id INT,
     platform VARCHAR(50),
-    content VARCHAR(500),
-    status VARCHAR(50),
-    hashtags VARCHAR(500),
-    word_count INT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    post_content TEXT,
+    scheduled_at TIMESTAMP NULL,
+    posted_at TIMESTAMP NULL,
+    engagement_count INT DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS social_engagement_metrics (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    post_id VARCHAR(100),
-    engagement_type VARCHAR(100),
-    engagement_count INT DEFAULT 0,
-    metrics_json LONGTEXT,
-    tracked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS social_engagement_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    likes INT DEFAULT 0,
-    comments INT DEFAULT 0,
-    shares INT DEFAULT 0,
-    tracked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS email_campaigns (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_ids VARCHAR(500),
-    content_html LONGTEXT,
-    content_hash VARCHAR(255),
-    status ENUM('draft', 'scheduled', 'sent') DEFAULT 'draft',
-    newsletter_date TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS email_scheduler (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    email_campaign_id INT,
-    scheduled_send_time TIMESTAMP NULL,
-    actual_send_time TIMESTAMP NULL,
-    delivery_status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
-    retry_count INT DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS email_send_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    newsletter_id INT,
-    subscriber_id VARCHAR(100),
-    status VARCHAR(50),
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS email_tracking_events (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    newsletter_id INT,
-    subscriber_id VARCHAR(100),
-    event_type VARCHAR(100),
-    clicked_link VARCHAR(500),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS analytics_events (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    event_type VARCHAR(100),
-    event_value INT,
-    event_data LONGTEXT,
-    affiliate_product_id INT,
-    newsletter_id INT,
-    subscriber_id VARCHAR(100),
-    occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    processed_at TIMESTAMP NULL
-);
-
-CREATE TABLE IF NOT EXISTS headline_testing (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    headline_variant_a VARCHAR(500),
-    headline_variant_b VARCHAR(500),
-    variant_a_clicks INT DEFAULT 0,
-    variant_b_clicks INT DEFAULT 0,
-    winner VARCHAR(1),
-    test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS headline_confirmations (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    headline_text VARCHAR(500),
-    headline_analysis LONGTEXT,
-    confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS product_research (
+CREATE TABLE IF NOT EXISTS email_templates (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT,
+    email_subject VARCHAR(255),
+    email_body LONGTEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP NULL
+);
+
+CREATE TABLE IF NOT EXISTS affiliate_links (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_post_id INT,
+    affiliate_url VARCHAR(500),
+    affiliate_network VARCHAR(100),
     product_name VARCHAR(255),
-    product_url VARCHAR(500),
-    affiliate_link VARCHAR(500),
     commission_rate DECIMAL(5,2),
-    research_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    clicks INT DEFAULT 0,
+    conversions INT DEFAULT 0,
+    revenue DECIMAL(10,2) DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS affiliate_products (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    product_name VARCHAR(255),
-    product_url VARCHAR(500),
-    description LONGTEXT,
-    commission_rate DECIMAL(5,2),
-    advertiser VARCHAR(255),
-    source_network VARCHAR(100),
-    score DECIMAL(5,2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS affiliate_search_queue (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    topic VARCHAR(255),
-    search_terms VARCHAR(500),
-    triggered_by VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS affiliate_injection_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    product_name VARCHAR(255),
-    placement_position INT,
-    injected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS static_links (
+CREATE TABLE IF NOT EXISTS wordpress_sync_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_post_id INT,
-    link_url VARCHAR(500),
-    link_text VARCHAR(255),
-    link_position INT,
-    injected_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS link_injection_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    injection_type VARCHAR(100),
-    links_count INT,
-    placement_zone VARCHAR(100),
-    injected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS wordpress_posts (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
     wordpress_post_id VARCHAR(100),
-    wordpress_url VARCHAR(500),
-    published_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('published', 'draft', 'scheduled', 'failed') DEFAULT 'draft'
+    sync_status VARCHAR(50),
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    error_message TEXT
 );
 
-CREATE TABLE IF NOT EXISTS wordpress_publication_log (
+CREATE TABLE IF NOT EXISTS robot_execution_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    wordpress_post_id VARCHAR(100),
-    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS wordpress_comments (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    author_name VARCHAR(255),
-    author_email VARCHAR(255),
-    content LONGTEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS wordpress_responses (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    comment_id INT,
-    response_text LONGTEXT,
-    is_automated BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS wordpress_connection_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    status VARCHAR(50),
-    health_score DECIMAL(3,2),
-    site_health VARCHAR(50),
-    posts_endpoint VARCHAR(50),
-    categories_endpoint VARCHAR(50),
-    post_creation VARCHAR(50),
-    auth_check VARCHAR(50),
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS social_distribution_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    social_post_id VARCHAR(100),
-    status VARCHAR(50),
-    distributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS comment_moderation (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    comment_text LONGTEXT,
-    comment_author VARCHAR(255),
-    comment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_approved BOOLEAN DEFAULT FALSE,
-    is_spam BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE IF NOT EXISTS comment_response_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    response_text LONGTEXT,
-    responded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS content_refresh_tasks (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    refresh_type VARCHAR(100),
+    robot_name VARCHAR(100),
+    execution_time_seconds DECIMAL(10,2),
     status VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS refresh_workflow_queue (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    current_stage VARCHAR(100),
-    workflow_sequence INT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS content_revalidation (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT,
-    revalidation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_still_relevant BOOLEAN DEFAULT TRUE,
-    content_update_needed BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE IF NOT EXISTS plagiarism_recheck (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT,
-    original_plagiarism_score DECIMAL(5,2),
-    recheck_plagiarism_score DECIMAL(5,2),
-    recheck_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('pending', 'passed', 'failed', 'needs_revision') DEFAULT 'pending'
-);
-
-CREATE TABLE IF NOT EXISTS final_qa_verification (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT,
-    final_check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    all_checks_passed BOOLEAN DEFAULT FALSE,
-    issues_found VARCHAR(500)
 );
 
 CREATE TABLE IF NOT EXISTS system_error_log (
@@ -490,14 +238,6 @@ CREATE TABLE IF NOT EXISTS robot_locks (
     lock_expires_at TIMESTAMP NULL
 );
 
-CREATE TABLE IF NOT EXISTS robot_execution_log (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    robot_name VARCHAR(100),
-    execution_time_seconds DECIMAL(10,2),
-    status VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS digital_products (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_id INT,
@@ -522,23 +262,13 @@ CREATE TABLE IF NOT EXISTS page_view_analytics (
     page_url VARCHAR(500),
     user_session_id VARCHAR(100),
     time_on_page INT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    bounce_rate DECIMAL(5,2),
+    view_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS system_reports (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    report_type VARCHAR(100),
-    report_data LONGTEXT,
-    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS topic_category_mapping (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    topic_name VARCHAR(255),
-    wordpress_category_id VARCHAR(100)
-);
-
-INSERT IGNORE INTO topic_rotation (topic_name, status, cycle_number, topic_sequence, is_active) VALUES
+-- CRITICAL FIX: Use ON DUPLICATE KEY UPDATE so existing rows get updated with correct values
+-- Previously INSERT IGNORE would skip existing rows, leaving them with NULL values
+INSERT INTO topic_rotation (topic_name, status, cycle_number, topic_sequence, is_active) VALUES
 ('Health and Fitness', 'active', 1, 1, TRUE),
 ('Weight Loss', 'inactive', 1, 2, FALSE),
 ('Muscle Building', 'inactive', 1, 3, FALSE),
@@ -556,9 +286,10 @@ INSERT IGNORE INTO topic_rotation (topic_name, status, cycle_number, topic_seque
 ('Sports Performance', 'inactive', 1, 15, FALSE),
 ('Home Fitness Solutions', 'inactive', 1, 16, FALSE),
 ('Supplement Guide', 'inactive', 1, 17, FALSE),
-('Habit Building and Lifestyle', 'inactive', 1, 18, FALSE);
+('Habit Building and Lifestyle', 'inactive', 1, 18, FALSE)
+ON DUPLICATE KEY UPDATE status=VALUES(status), cycle_number=VALUES(cycle_number), topic_sequence=VALUES(topic_sequence), is_active=VALUES(is_active);
 
-INSERT IGNORE INTO trending_keywords (keyword, topic, search_volume, competition_level, trend_direction, trend_score) VALUES
+INSERT INTO trending_keywords (keyword, topic, search_volume, competition_level, trend_direction, trend_score) VALUES
 ('health and fitness', 'Health and Fitness', 50000, 'High', 'up', 8.5),
 ('fitness tips', 'Health and Fitness', 40000, 'High', 'up', 8.2),
 ('health trends 2026', 'Health and Fitness', 25000, 'Medium', 'up', 8.8),
@@ -648,6 +379,7 @@ INSERT IGNORE INTO trending_keywords (keyword, topic, search_volume, competition
 ('lifestyle changes', 'Habit Building and Lifestyle', 40000, 'Medium', 'stable', 8.1),
 ('healthy habits', 'Habit Building and Lifestyle', 50000, 'High', 'up', 8.5),
 ('daily routines', 'Habit Building and Lifestyle', 42000, 'Medium', 'stable', 8.2),
-('lifestyle tips', 'Habit Building and Lifestyle', 38000, 'Medium', 'stable', 7.9);
+('lifestyle tips', 'Habit Building and Lifestyle', 38000, 'Medium', 'stable', 7.9)
+ON DUPLICATE KEY UPDATE search_volume=VALUES(search_volume), competition_level=VALUES(competition_level), trend_direction=VALUES(trend_direction), trend_score=VALUES(trend_score);
 
 SET FOREIGN_KEY_CHECKS=1;
