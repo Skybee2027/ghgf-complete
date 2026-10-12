@@ -244,7 +244,22 @@ Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
         try:
             cursor = conn.cursor()
 
-            # Handle topic_id - if no topic, insert NULL (topic_id can be updated later by other robots)
+            # Get a default topic_id from topic_rotation table
+            topic_id = None
+            try:
+                cursor.execute("SELECT id FROM topic_rotation LIMIT 1")
+                topic_result = cursor.fetchone()
+                if topic_result:
+                    topic_id = topic_result[0]
+                    logger.info(f"Using default topic_id: {topic_id}")
+            except Exception as e:
+                logger.warning(f"Could not fetch default topic: {str(e)}")
+
+            # If no topic found, return error
+            if not topic_id:
+                logger.error("No default topic found in topic_rotation table")
+                return None
+
             query = """
                 INSERT INTO blog_posts (title_id, title, content, topic_id, status, ready_for_wordpress, final_qa_passed, version, created_at)
                 VALUES (%s, %s, %s, %s, 'draft', TRUE, TRUE, 1, NOW())
@@ -253,7 +268,7 @@ Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
                 title_data['id'],
                 title_data['title'],
                 content,
-                None  # topic_id - NULL if no topic assigned yet (can be set by other robots later)
+                topic_id  # Use default topic_id from topic_rotation
             ))
 
             blog_id = cursor.lastrowid
