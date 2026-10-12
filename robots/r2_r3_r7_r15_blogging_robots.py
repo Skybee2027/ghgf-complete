@@ -38,6 +38,12 @@ class BloggingRobot:
         self.pixabay_key = os.getenv("PIXABAY_API_KEY")
         self.cj_key = os.getenv("CJ_API_KEY")
 
+        # Model configuration (from environment variables only)
+        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
+        self.openai_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")  # Default to gpt-3.5-turbo if not set
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL", "command-r-plus")  # Default to command-r-plus if not set
+
         self.topics = [
             "fitness", "health", "nutrition", "workout", "diet",
             "exercise", "wellness", "healthy living", "gym tips", "weight loss"
@@ -123,7 +129,7 @@ class BloggingRobot:
             client = OpenAI(api_key=self.openai_key)
 
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.openai_model,
                 messages=[{
                     "role": "user",
                     "content": f"""Write a detailed, engaging blog post about: {title}

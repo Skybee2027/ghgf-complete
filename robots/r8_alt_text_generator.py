@@ -36,6 +36,7 @@ class AltTextGenerator:
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
         self.groq_key = os.getenv("GROQ_API_KEY", "")
+        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
         self.alt_texts_generated = 0
 
     def print_header(self, title):
@@ -172,7 +173,7 @@ Examples of GOOD alt text:
 Generate ONLY the alt text, no explanation."""
 
             response = client.chat.completions.create(
-                model="mixtral-8x7b-32768",
+                model=self.groq_model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=200,
                 temperature=0.7

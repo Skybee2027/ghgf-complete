@@ -50,10 +50,10 @@ class BlogTitleGenerator:
         self.openai_key = os.getenv("OPENAI_API_KEY")
 
         # Model names - FULLY OPEN - only from environment variables, NO hardcoded defaults
-        self.groq_model = os.getenv("GROQ_MODEL")
+        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")  # Default to mixtral if not set
         self.gemini_model = os.getenv("GEMINI_MODEL")
-        self.cohere_model = os.getenv("COHERE_MODEL")
-        self.openai_model = os.getenv("OPENAI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL", "command-r-plus")  # Default to command-r-plus if not set
+        self.openai_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")  # Default to gpt-3.5-turbo if not set
 
         logger.debug(f"Model configuration (from environment variables only):")
         logger.debug(f"  GROQ_MODEL={self.groq_model if self.groq_model else '(not set - provider will auto-select)'}")
@@ -259,41 +259,14 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
             logger.info("Step 3: Calling Groq API...")
             try:
-                # Build API call - only include model if explicitly configured
-                api_params = {
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 300,
-                    "temperature": 0.8
-                }
-                if self.groq_model:
-                    api_params["model"] = self.groq_model
-                    logger.debug(f"  Using explicitly configured model: {self.groq_model}")
-                else:
-                    # If no model specified, try to get available CHAT models (not classifiers)
-                    try:
-                        models = client.models.list()
-                        # Filter for actual chat models - exclude classifiers and small models
-                        available_models = [m.id for m in models.data
-                                          if 'llama' in m.id.lower()
-                                          and 'prompt-guard' not in m.id.lower()
-                                          and 'distil' not in m.id.lower()]
-
-                        if not available_models:
-                            # Fallback: get first model that isn't obviously a classifier
-                            available_models = [m.id for m in models.data
-                                              if 'llama' in m.id.lower()]
-
-                        if available_models:
-                            # Pick the most capable one (usually has highest number)
-                            available_models.sort(reverse=True)
-                            api_params["model"] = available_models[0]
-                            logger.debug(f"  Auto-selected Groq chat model: {available_models[0]}")
-                        else:
-                            logger.warning("  No suitable chat models found, attempting without explicit model...")
-                    except Exception as e:
-                        logger.warning(f"  Could not auto-detect models ({str(e)}), attempting without explicit model...")
-
-                response = client.chat.completions.create(**api_params)
+                # Groq REQUIRES model parameter - use configured model or default
+                logger.debug(f"  Using model: {self.groq_model}")
+                response = client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                    temperature=0.8
+                )
                 logger.info("✓ Groq API call succeeded")
             except Exception as api_error:
                 logger.error(f"GROQ API CALL FAILED:")
@@ -546,26 +519,14 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
             logger.info("Step 3: Calling OpenAI API...")
             try:
-                api_params = {
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 300,
-                    "temperature": 0.8
-                }
-                if self.openai_model:
-                    api_params["model"] = self.openai_model
-                else:
-                    try:
-                        models = client.models.list()
-                        available_models = [m.id for m in models.data if 'gpt' in m.id.lower()]
-                        if available_models:
-                            api_params["model"] = available_models[0]
-                            logger.debug(f"  Auto-selected OpenAI model: {available_models[0]}")
-                        else:
-                            logger.warning("  No available GPT models found, attempting without explicit model...")
-                    except:
-                        logger.warning("  Could not auto-detect models, attempting without explicit model...")
-
-                response = client.chat.completions.create(**api_params)
+                # OpenAI REQUIRES model parameter - use configured model or default
+                logger.debug(f"  Using model: {self.openai_model}")
+                response = client.chat.completions.create(
+                    model=self.openai_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                    temperature=0.8
+                )
                 logger.info("✓ OpenAI API call succeeded")
             except Exception as api_error:
                 logger.error(f"OPENAI API CALL FAILED:")
