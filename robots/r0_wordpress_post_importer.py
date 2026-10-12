@@ -26,7 +26,7 @@ class WordPressPostImporter:
     
     def __init__(self):
         """Initialize with environment variables"""
-        self.wordpress_url = os.getenv('WORDPRESS_SITE_URL', '').rstrip('/')
+        self.wordpress_url = os.getenv('WORDPRESS_URL', '').rstrip('/')
         self.db_host = os.getenv('DB_HOST', '193.203.166.223')
         self.db_user = os.getenv('DB_USER', '')
         self.db_password = os.getenv('DB_PASSWORD', '')

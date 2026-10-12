@@ -336,7 +336,7 @@ class SocialEngagementMonitor:
                 return
 
             # Generate response message
-            wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
+            wordpress_url = os.getenv('WORDPRESS_URL', 'https://greathealthgreatfitness.com')
             post_url = f"{wordpress_url}/{post['slug']}/"
 
             response_text = f"Thanks for your interest! Check out the full article on our blog: {post_url}"

@@ -30,8 +30,8 @@ class DigitalProductCreator:
 
     def __init__(self):
         """Initialize with environment variables"""
-        self.wordpress_url = os.getenv('WORDPRESS_SITE_URL', '').rstrip('/')
-        self.wordpress_user = os.getenv('WORDPRESS_USERNAME', '')
+        self.wordpress_url = os.getenv('WORDPRESS_URL', '').rstrip('/')
+        self.wordpress_user = os.getenv('WORDPRESS_USER', '')
         self.wordpress_pass = os.getenv('WORDPRESS_PASSWORD', '')
 
         self.db_host = os.getenv('DB_HOST', '193.203.166.223')

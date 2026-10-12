@@ -163,7 +163,7 @@ class SocialDistributor:
             hashtags = self.generate_hashtags(post.get('categories', ''), post.get('tags', ''))
 
             # Build WordPress URL
-            wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
+            wordpress_url = os.getenv('WORDPRESS_URL', 'https://greathealthgreatfitness.com')
             post_url = f"{wordpress_url}/{post['slug']}/"
 
             tweet = f"{excerpt}\n\n{hashtags}\n\n{post_url}"
@@ -206,7 +206,7 @@ class SocialDistributor:
             excerpt = self.extract_excerpt(post['title'], 300)
             hashtags = self.generate_hashtags(post.get('categories', ''), post.get('tags', ''))
 
-            wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
+            wordpress_url = os.getenv('WORDPRESS_URL', 'https://greathealthgreatfitness.com')
             post_url = f"{wordpress_url}/{post['slug']}/"
 
             message = f"{excerpt}\n\n{hashtags}"
@@ -251,7 +251,7 @@ class SocialDistributor:
             excerpt = self.extract_excerpt(post['title'], 300)
             hashtags = self.generate_hashtags(post.get('categories', ''), post.get('tags', ''))
 
-            wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
+            wordpress_url = os.getenv('WORDPRESS_URL', 'https://greathealthgreatfitness.com')
             post_url = f"{wordpress_url}/{post['slug']}/"
 
             caption = f"{excerpt}\n\n{hashtags}\n\nLink in bio: {post_url}"
@@ -316,7 +316,7 @@ class SocialDistributor:
             excerpt = self.extract_excerpt(post['title'], 300)
             hashtags = self.generate_hashtags(post.get('categories', ''), post.get('tags', ''))
 
-            wordpress_url = os.getenv('WORDPRESS_SITE_URL', 'https://greathealthgreatfitness.com')
+            wordpress_url = os.getenv('WORDPRESS_URL', 'https://greathealthgreatfitness.com')
             post_url = f"{wordpress_url}/{post['slug']}/"
 
             text = f"{excerpt}\n\n{hashtags}\n\nRead full article: {post_url}"

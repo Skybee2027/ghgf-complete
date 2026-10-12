@@ -24,8 +24,8 @@ YELLOW = '\033[93m'
 
 class BloggingRobot:
     def __init__(self):
-        self.site_url = os.getenv("WORDPRESS_SITE_URL", "").rstrip('/')
-        self.wp_username = os.getenv("WORDPRESS_USERNAME")
+        self.site_url = os.getenv("WORDPRESS_URL", "").rstrip('/')
+        self.wp_username = os.getenv("WORDPRESS_USER")
         self.wp_password = os.getenv("WORDPRESS_PASSWORD")
         self.posts_created = 0
 
@@ -428,7 +428,7 @@ class BloggingRobot:
 
         # Validate WordPress
         if not self.site_url:
-            print(f"{RED}❌ WORDPRESS_SITE_URL not configured{RESET}")
+            print(f"{RED}❌ WORDPRESS_URL not configured{RESET}")
             return False
 
         if not self.wp_username or not self.wp_password:
