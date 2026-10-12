@@ -19,16 +19,13 @@ env:
   COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-  # Note: Model names are now hardcoded in robot scripts (no env variable dependency)
-  # Robots use proven defaults:
-  #   Groq: mixtral-8x7b-32768
-  #   Gemini: gemini-pro
-  #   Cohere: command-r-plus
-  #   OpenAI: gpt-3.5-turbo
+  # Note: Model names are configured via environment variables
+  # Set GROQ_MODEL, OPENAI_MODEL, GEMINI_MODEL, COHERE_MODEL as needed
+  # Robots dynamically use whatever models are configured (no hardcoded defaults)
 
   # WordPress Configuration (for publishing)
-  WORDPRESS_URL: ${{ secrets.WORDPRESS_SITE_URL || secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
-  WORDPRESS_USER: ${{ secrets.WORDPRESS_USERNAME || secrets.WORDPRESS_USER || 'api_user' }}
+  WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
+  WORDPRESS_USER: ${{ secrets.WORDPRESS_USER || 'api_user' }}
   WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD || '' }}
 
 jobs:
