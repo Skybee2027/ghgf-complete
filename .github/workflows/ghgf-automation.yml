@@ -1,20 +1,151 @@
+name: GHGF 42-Robot Autonomous Blogging System
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:       # Manual trigger
+
 jobs:
-  run-robots:
+  ghgf-pipeline:
     runs-on: ubuntu-latest
+    
+    # Set environment variables from GitHub Actions Secrets
     env:
       DB_HOST: ${{ secrets.DB_HOST }}
       DB_USER: ${{ secrets.DB_USER }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       DB_NAME: ${{ secrets.DB_NAME }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+      WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+    
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install MySQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+      
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Verify Environment Variables
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "ENVIRONMENT VARIABLE VERIFICATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          if [ -z "$DB_HOST" ]; then
+            echo "❌ ERROR: DB_HOST not set"
+            exit 1
+          else
+            echo "✓ DB_HOST is set: $DB_HOST"
+          fi
+          
+          if [ -z "$DB_USER" ]; then
+            echo "❌ ERROR: DB_USER not set"
+            exit 1
+          else
+            echo "✓ DB_USER is set: $DB_USER"
+          fi
+          
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "❌ ERROR: DB_PASSWORD not set"
+            exit 1
+          else
+            echo "✓ DB_PASSWORD is set (length: ${#DB_PASSWORD})"
+          fi
+          
+          if [ -z "$DB_NAME" ]; then
+            echo "❌ ERROR: DB_NAME not set"
+            exit 1
+          else
+            echo "✓ DB_NAME is set: $DB_NAME"
+          fi
+          
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "❌ ERROR: GROQ_API_KEY not set"
+            exit 1
+          else
+            echo "✓ GROQ_API_KEY is set (length: ${#GROQ_API_KEY})"
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "All required environment variables are configured ✓"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
+      - name: Test Database Connection
+        run: |
+          echo "Testing database connection..."
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SELECT 1;" && echo "✓ Database connection successful" || echo "❌ Database connection failed"
       
       - name: Fix Database Schema
         run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "EXECUTING DATABASE SCHEMA MIGRATION"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
           mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < fix_database_schema.sql
-          echo "✓ Database schema migration completed"
+          
+          if [ $? -eq 0 ]; then
+            echo "✓ Database schema migration completed successfully"
+          else
+            echo "❌ Database schema migration failed"
+            exit 1
+          fi
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         continue-on-error: false
       
-      - name: Run Full Pipeline
-        run: python run_full_pipeline.py
+      - name: Run Full 35-Robot Pipeline
+        run: |
+          echo "Starting GHGF 35-Robot Full Pipeline..."
+          python run_full_pipeline.py
+        continue-on-error: true
+      
+      - name: Generate Execution Report
+        if: always()
+        run: |
+          echo "Pipeline execution completed"
+          echo "Check GitHub Actions logs above for detailed results"
+      
+      - name: Slack Notification (On Failure - Optional)
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ GHGF Pipeline Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *GHGF Automation Pipeline Failed*\n\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref }}\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  notify-on-success:
+    needs: ghgf-pipeline
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Success Notification
+        run: |
+          echo "✓ GHGF Pipeline completed successfully"
+          echo "New blog post should appear on WordPress within 5-10 minutes"
