@@ -1,11 +1,15 @@
+SET FOREIGN_KEY_CHECKS=0;
+
 DROP TABLE IF EXISTS topic_rotation_backup;
-ALTER TABLE topic_rotation RENAME TO topic_rotation_backup;
+ALTER TABLE IF EXISTS topic_rotation RENAME TO topic_rotation_backup;
 DROP TABLE IF EXISTS blog_titles_backup;
-ALTER TABLE blog_titles RENAME TO blog_titles_backup;
+ALTER TABLE IF EXISTS blog_titles RENAME TO blog_titles_backup;
 DROP TABLE IF EXISTS blog_posts_backup;
-ALTER TABLE blog_posts RENAME TO blog_posts_backup;
+ALTER TABLE IF EXISTS blog_posts RENAME TO blog_posts_backup;
 DROP TABLE IF EXISTS trending_keywords_backup;
-ALTER TABLE trending_keywords RENAME TO trending_keywords_backup;
+ALTER TABLE IF EXISTS trending_keywords RENAME TO trending_keywords_backup;
+
+SET FOREIGN_KEY_CHECKS=1;
 
 CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
