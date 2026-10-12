@@ -52,7 +52,8 @@ class BlogTitleGenerator:
         # User can override with environment variables, otherwise sensible defaults are used
         # Defaults chosen for broad availability across free/trial accounts:
         # Using 'or' operator to handle empty strings from GitHub Secrets
-        self.groq_model = os.getenv("GROQ_MODEL") or "mixtral-8x7b-32768"
+        # NOTE: mixtral-8x7b-32768 was decommissioned, using llama-3.1-70b-versatile instead
+        self.groq_model = os.getenv("GROQ_MODEL") or "llama-3.1-70b-versatile"
         self.gemini_model = os.getenv("GEMINI_MODEL") or "gemini-pro"
         self.cohere_model = os.getenv("COHERE_MODEL") or "command-r"
         self.openai_model = os.getenv("OPENAI_MODEL") or "gpt-3.5-turbo"
