@@ -79,14 +79,30 @@ jobs:
     - name: Wait for MySQL and initialize database
       run: |
         echo "Connecting to external database at $DB_HOST..."
+        echo "DB_HOST=$DB_HOST"
+        echo "DB_USER=$DB_USER"
+        echo "DB_NAME=$DB_NAME"
+
+        CONNECTION_SUCCESS=false
         for i in {1..30}; do
-          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" 2>/dev/null; then
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" 2>&1; then
             echo "✅ Database connection successful!"
+            CONNECTION_SUCCESS=true
             break
           fi
-          echo "Attempt $i/30 - Database not ready yet..."
-          sleep 1
+          echo "Attempt $i/30 - Connecting to $DB_HOST..."
+          sleep 2
         done
+
+        if [ "$CONNECTION_SUCCESS" = false ]; then
+          echo "❌ CRITICAL: Could not connect to database at $DB_HOST after 30 attempts"
+          echo "Please verify:"
+          echo "  1. DB_HOST secret is set correctly"
+          echo "  2. DB_USER and DB_PASSWORD are correct"
+          echo "  3. Database server is online and accessible"
+          echo "  4. Network/firewall allows connection from GitHub Actions"
+          exit 1
+        fi
 
         echo "Creating database and loading schema..."
         mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
@@ -106,7 +122,6 @@ jobs:
           mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R14b_Database_Schema.sql
           echo "✓ Loaded R14b_Database_Schema.sql"
         fi
-      continue-on-error: true
     
     - name: Run GHGF Pipeline
       run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
