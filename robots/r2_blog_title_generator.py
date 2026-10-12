@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-R2: Blog Title Generator (Enhanced with Comprehensive Debugging)
+R2: Blog Title Generator (Enhanced with Multi-Model Fallback)
 Purpose: Generate 5 catchy, SEO-optimized blog titles using trending keywords and 18-topic rotation
 Input: Trending keywords (from R13), current topic from rotation schedule
 Output: 5 title variations (best selected for next phase)
 Frequency: Every 6 hours
 Dependencies: Requires R13 to populate trending_keywords table + topic_rotation table
+Features: Multiple Groq models with automatic fallback if model is deprecated
 """
 
 import os
@@ -30,6 +31,15 @@ GREEN = '\033[92m'
 RED = '\033[91m'
 YELLOW = '\033[93m'
 BLUE = '\033[94m'
+
+# List of Groq models to try in order (fallback mechanism)
+# Updated: October 12, 2026 - Production Models only
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",      # Primary - Currently Active (Oct 2026)
+    "llama-3.1-8b-instant",         # Fallback 1 - Currently Active
+    "mixtral-8x7b-32768",           # Fallback 2 - May be deprecated
+    "llama-2-70b-chat",             # Fallback 3 - May be deprecated
+]
 
 class BlogTitleGenerator:
     def __init__(self):
@@ -64,6 +74,7 @@ class BlogTitleGenerator:
         self.titles_generated = 0
         self.current_topic = None
         self.trending_keywords = []
+        self.successful_model = None
 
     def print_header(self, title):
         """Print formatted header"""
@@ -176,21 +187,16 @@ class BlogTitleGenerator:
             return []
 
     def generate_titles_with_groq(self, topic, keywords):
-        """Generate 5 title variations using Groq"""
-        try:
-            logger.info("=" * 70)
-            logger.info("GROQ API INITIALIZATION & CALL")
-            logger.info("=" * 70)
+        """Generate 5 title variations using Groq with automatic model fallback"""
+        logger.info("=" * 70)
+        logger.info("GROQ API INITIALIZATION & CALL (WITH MODEL FALLBACK)")
+        logger.info("=" * 70)
+        logger.info(f"Available models to try: {', '.join(GROQ_MODELS)}")
 
-            logger.info("Step 1: Initializing Groq client...")
-            logger.debug(f"  API Key length: {len(self.groq_key)} characters")
-            client = Groq(api_key=self.groq_key)
-            logger.info("✓ Groq client initialized successfully")
+        keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+        logger.debug(f"Keywords for prompt: {keywords_list}")
 
-            keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
-            logger.debug(f"Keywords for prompt: {keywords_list}")
-
-            prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
+        prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
 
 Use these trending keywords naturally: {keywords_list}
 
@@ -207,75 +213,86 @@ Requirements:
 Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
-            logger.info("Step 2: Building API request...")
-            logger.debug(f"  Model: llama-3.1-70b-versatile")
-            logger.debug(f"  Max tokens: 300")
-            logger.debug(f"  Temperature: 0.8")
-            logger.debug(f"  Prompt length: {len(prompt)} characters")
-
-            logger.info("Step 3: Calling Groq API...")
+        # Try each model in sequence
+        for model_index, model in enumerate(GROQ_MODELS, 1):
             try:
-                response = client.chat.completions.create(
-                    model="llama-3.1-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=300,
-                    temperature=0.8
-                )
-                logger.info("✓ Groq API call succeeded")
-            except Exception as api_error:
-                logger.error(f"GROQ API CALL FAILED:")
-                logger.error(f"  Error Type: {type(api_error).__name__}")
-                logger.error(f"  Error Message: {str(api_error)}")
-                logger.error(f"  Full traceback:")
-                for line in traceback.format_exc().split('\n'):
-                    logger.error(f"    {line}")
-                return None
+                logger.info(f"\n[Attempt {model_index}/{len(GROQ_MODELS)}] Trying model: {model}")
+                logger.debug(f"  Max tokens: 300")
+                logger.debug(f"  Temperature: 0.8")
+                logger.debug(f"  Prompt length: {len(prompt)} characters")
 
-            logger.info("Step 4: Processing response...")
-            logger.debug(f"  Response type: {type(response)}")
-            logger.debug(f"  Response has choices: {hasattr(response, 'choices')}")
+                logger.info("Initializing Groq client...")
+                client = Groq(api_key=self.groq_key)
+                logger.info("✓ Groq client initialized successfully")
 
-            if not response.choices:
-                logger.error("Groq returned empty response (no choices)")
-                logger.debug(f"Full response: {response}")
-                return None
+                logger.info(f"Calling Groq API with model: {model}...")
+                try:
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=300,
+                        temperature=0.8
+                    )
+                    logger.info("✓ Groq API call succeeded")
+                except Exception as api_error:
+                    error_str = str(api_error)
+                    logger.warning(f"Model '{model}' failed - {type(api_error).__name__}")
+                    logger.debug(f"  Error: {error_str}")
+                    
+                    # Check if it's a deprecation error
+                    if "decommissioned" in error_str.lower() or "deprecated" in error_str.lower():
+                        logger.warning(f"  ⚠️  Model '{model}' has been decommissioned. Trying next model...")
+                        continue
+                    else:
+                        # Other API errors - still try next model
+                        logger.warning(f"  Other API error. Trying next model...")
+                        continue
 
-            logger.debug(f"  Number of choices: {len(response.choices)}")
-            first_choice = response.choices[0]
-            logger.debug(f"  First choice has message: {hasattr(first_choice, 'message')}")
+                # Process response
+                logger.info("Processing response...")
+                if not response.choices:
+                    logger.warning("Groq returned empty response (no choices)")
+                    continue
 
-            if not first_choice.message:
-                logger.error("Groq first choice has no message")
-                return None
+                first_choice = response.choices[0]
+                if not first_choice.message:
+                    logger.warning("Groq first choice has no message")
+                    continue
 
-            logger.debug(f"  Message content length: {len(first_choice.message.content)} characters")
+                if first_choice.message.content:
+                    titles_raw = first_choice.message.content.strip()
+                    logger.info(f"✓ Received response content: {len(titles_raw)} characters")
+                    logger.debug(f"  Raw content: {titles_raw}")
 
-            if first_choice.message.content:
-                titles_raw = first_choice.message.content.strip()
-                logger.info(f"✓ Received response content: {len(titles_raw)} characters")
-                logger.debug(f"  Raw content: {titles_raw}")
+                    titles = [t.strip() for t in titles_raw.split('|')]
+                    titles = [t for t in titles if t]  # Remove empty
 
-                titles = [t.strip() for t in titles_raw.split('|')]
-                titles = [t for t in titles if t]  # Remove empty
+                    if len(titles) >= 3:  # Require at least 3 titles
+                        logger.info(f"✓ Parsed {len(titles)} titles from response")
+                        for i, t in enumerate(titles[:5], 1):
+                            logger.debug(f"  Title {i}: {t}")
 
-                logger.info(f"✓ Parsed {len(titles)} titles from response")
-                for i, t in enumerate(titles[:5], 1):
-                    logger.debug(f"  Title {i}: {t}")
+                        self.titles_generated = len(titles)
+                        self.successful_model = model
+                        logger.info(f"✅ SUCCESS: Generated {len(titles)} titles using model: {model}")
+                        return titles[:5]
+                    else:
+                        logger.warning(f"Insufficient titles generated ({len(titles)}). Trying next model...")
+                        continue
+                else:
+                    logger.warning("Groq returned empty message content")
+                    continue
 
-                self.titles_generated = len(titles)
-                return titles[:5]  # Return max 5
-            else:
-                logger.error("Groq returned empty message content")
-                logger.debug(f"Full response: {response}")
-                return None
-        except Exception as e:
-            logger.error(f"UNEXPECTED ERROR IN generate_titles_with_groq:")
-            logger.error(f"  Error Type: {type(e).__name__}")
-            logger.error(f"  Error Message: {str(e)}")
-            logger.error(f"  Full traceback:")
-            for line in traceback.format_exc().split('\n'):
-                logger.error(f"    {line}")
-            return None
+            except Exception as e:
+                logger.error(f"Error with model '{model}': {type(e).__name__}")
+                logger.debug(f"  Error message: {str(e)}")
+                logger.warning(f"  Trying next model...")
+                continue
+
+        # All models failed
+        logger.error("❌ ALL MODELS FAILED - No available model could generate titles")
+        logger.error(f"Models tried: {', '.join(GROQ_MODELS)}")
+        return None
 
     def score_titles(self, titles):
         """Score titles based on SEO and engagement factors"""
@@ -351,7 +368,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
 
     def run(self):
         """Main execution flow"""
-        self.print_header("R2: BLOG TITLE GENERATOR")
+        self.print_header("R2: BLOG TITLE GENERATOR (Multi-Model Fallback)")
         print(f"Execution: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
         # Connect to database
@@ -378,7 +395,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
                 print(f"  • {kw['keyword']} (Volume: {kw['search_volume']}, Competition: {kw['competition_level']})")
             print()
 
-            # Step 3: Generate titles using Groq
+            # Step 3: Generate titles using Groq (with model fallback)
             print(f"{BOLD}Step 3: Generating 5 Title Variations{RESET}")
             titles = self.generate_titles_with_groq(topic, keywords)
             if not titles:
@@ -409,6 +426,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             print(f"  Topic: {BLUE}{topic['topic_name']}{RESET}")
             print(f"  Keywords: {len(keywords)} trending keywords available")
             print(f"  Titles Generated: {GREEN}{self.titles_generated}{RESET}")
+            print(f"  Model Used: {BLUE}{self.successful_model}{RESET}")
             print(f"  Best Title: {BLUE}{scored_titles[0]['title']}{RESET} (Score: {scored_titles[0]['score']}/100)")
             print(f"  Status: {GREEN}SUCCESS{RESET}")
             print('='*70 + "\n")
