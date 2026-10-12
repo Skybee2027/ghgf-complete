@@ -86,7 +86,8 @@ def run_robot(robot_file, robot_name):
             ['python3', robot_path],
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout per robot
+            timeout=300,  # 5 minute timeout per robot
+            env=os.environ  # Explicitly pass environment variables (API keys, DB config, etc)
         )
 
         if result.returncode == 0:
@@ -130,12 +131,50 @@ def run_robot(robot_file, robot_name):
         logger.error(f"✗ {robot_name} - EXCEPTION: {str(e)}")
         return False
 
+def verify_database():
+    """Verify database connectivity before running robots"""
+    try:
+        import mysql.connector
+        db_config = {
+            'host': os.getenv('DB_HOST', 'localhost'),
+            'user': os.getenv('DB_USER', 'root'),
+            'password': os.getenv('DB_PASSWORD', ''),
+            'database': os.getenv('DB_NAME', 'ghgf_blogging'),
+            'connection_timeout': 5
+        }
+
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # Check for critical tables
+        critical_tables = ['blog_posts', 'topics', 'topic_rotation', 'trending_keywords']
+        for table in critical_tables:
+            cursor.execute(f"SHOW TABLES LIKE '{table}'")
+            if not cursor.fetchone():
+                logger.error(f"✗ CRITICAL: Table '{table}' not found in database")
+                cursor.close()
+                conn.close()
+                return False
+
+        cursor.close()
+        conn.close()
+        logger.info("✓ Database verification passed - all critical tables exist")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Database verification failed: {str(e)}")
+        return False
+
 def main():
     logger.info("=" * 80)
     logger.info("GHGF 42-ROBOT AUTONOMOUS BLOGGING SYSTEM")
     logger.info("Starting Full Pipeline Cycle")
     logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 80)
+
+    # Verify database before running robots
+    if not verify_database():
+        logger.error("✗ Database verification failed - aborting pipeline")
+        return 1
     
     successful = 0
     failed = 0
