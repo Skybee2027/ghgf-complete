@@ -81,12 +81,11 @@ class BloggingRobot:
             from groq import Groq
             client = Groq(api_key=self.groq_key)
 
-            models_to_try = [
-                "mixtral-8x7b-32768",
-                "llama-3.1-70b-versatile",
-                "llama2-70b-4096",
-                "qwen-3.8-27b"
-            ]
+            # Use environment-configured model, with fallback chain from env var
+            models_to_try = os.getenv("GROQ_MODELS_FALLBACK", "mixtral-8x7b-32768,llama-3.1-70b-versatile,llama2-70b-4096,qwen-3.8-27b").split(",")
+            # Always try the configured model first
+            if self.groq_model and self.groq_model not in models_to_try:
+                models_to_try.insert(0, self.groq_model)
 
             for model in models_to_try:
                 try:

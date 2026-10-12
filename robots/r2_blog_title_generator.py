@@ -346,7 +346,7 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.gemini_model if self.gemini_model else "gemini-pro"
+            model_name = self.gemini_model if self.gemini_model else os.getenv("GEMINI_MODEL_FALLBACK", "gemini-pro")
             logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
@@ -428,7 +428,7 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.cohere_model if self.cohere_model else "command-r-plus"
+            model_name = self.cohere_model if self.cohere_model else os.getenv("COHERE_MODEL_FALLBACK", "command-r-plus")
             logger.debug(f"  Model: {model_name}")
             logger.debug(f"  Max tokens: 300")
 
