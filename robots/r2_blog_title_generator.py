@@ -51,10 +51,11 @@ class BlogTitleGenerator:
         # Model names - fully configurable with intelligent defaults
         # User can override with environment variables, otherwise sensible defaults are used
         # Defaults chosen for broad availability across free/trial accounts:
-        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-pro")
-        self.cohere_model = os.getenv("COHERE_MODEL", "command-r")
-        self.openai_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        # Using 'or' operator to handle empty strings from GitHub Secrets
+        self.groq_model = os.getenv("GROQ_MODEL") or "mixtral-8x7b-32768"
+        self.gemini_model = os.getenv("GEMINI_MODEL") or "gemini-pro"
+        self.cohere_model = os.getenv("COHERE_MODEL") or "command-r"
+        self.openai_model = os.getenv("OPENAI_MODEL") or "gpt-3.5-turbo"
 
         logger.debug(f"Model configuration:")
         logger.debug(f"  GROQ_MODEL={self.groq_model} (default: mixtral-8x7b-32768)")
@@ -253,26 +254,20 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            if self.groq_model:
-                logger.debug(f"  Model: {self.groq_model} (from GROQ_MODEL env var)")
-            else:
-                logger.debug(f"  Model: Not specified - Groq API will use default available model")
+            logger.debug(f"  Model: {self.groq_model}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Groq API...")
             try:
-                # Build request kwargs - only add model if specified
-                request_kwargs = {
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 300,
-                    "temperature": 0.8
-                }
-                if self.groq_model:
-                    request_kwargs["model"] = self.groq_model
-
-                response = client.chat.completions.create(**request_kwargs)
+                # Groq API requires model parameter - always include it (guaranteed to have value from defaults)
+                response = client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                    temperature=0.8
+                )
                 logger.info("✓ Groq API call succeeded")
             except Exception as api_error:
                 logger.error(f"GROQ API CALL FAILED:")
@@ -352,13 +347,12 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.gemini_model if self.gemini_model else "gemini-pro"
-            logger.debug(f"  Model: {model_name}")
+            logger.debug(f"  Model: {self.gemini_model}")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Gemini API...")
             try:
-                model = genai.GenerativeModel(model_name)
+                model = genai.GenerativeModel(self.gemini_model)
                 response = model.generate_content(prompt)
                 logger.info("✓ Gemini API call succeeded")
             except Exception as api_error:
@@ -434,15 +428,14 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.cohere_model if self.cohere_model else "command-r"
-            logger.debug(f"  Model: {model_name}")
+            logger.debug(f"  Model: {self.cohere_model}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
 
             logger.info("Step 3: Calling Cohere API...")
             try:
                 response = client.chat(
-                    model=model_name,
+                    model=self.cohere_model,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300
                 )
@@ -520,8 +513,7 @@ Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
             logger.info("Step 2: Building API request...")
-            model_name = self.openai_model if self.openai_model else "gpt-3.5-turbo"
-            logger.debug(f"  Model: {model_name}")
+            logger.debug(f"  Model: {self.openai_model}")
             logger.debug(f"  Max tokens: 300")
             logger.debug(f"  Temperature: 0.8")
             logger.debug(f"  Prompt length: {len(prompt)} characters")
@@ -529,7 +521,7 @@ Target audience: Adults of all ages and genders interested in health & fitness""
             logger.info("Step 3: Calling OpenAI API...")
             try:
                 response = client.chat.completions.create(
-                    model=model_name,
+                    model=self.openai_model,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=300,
                     temperature=0.8
