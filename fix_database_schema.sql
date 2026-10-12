@@ -2,64 +2,68 @@ SET FOREIGN_KEY_CHECKS=0;
 
 CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    topic_name VARCHAR(255) NOT NULL UNIQUE,
-    status VARCHAR(50) DEFAULT 'active',
-    cycle_number INT DEFAULT 1,
-    topic_sequence INT,
-    start_date DATE,
-    cycle_day INT,
-    last_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE,
-    current_topic VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    topic_name VARCHAR(255) NOT NULL UNIQUE
 );
+
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active';
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS cycle_number INT DEFAULT 1;
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS topic_sequence INT;
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS cycle_day INT;
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS last_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS current_topic VARCHAR(255);
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS trending_keywords (
     id INT PRIMARY KEY AUTO_INCREMENT,
     keyword VARCHAR(255) NOT NULL UNIQUE,
-    topic VARCHAR(255) NOT NULL,
-    search_volume INT,
-    competition_level ENUM('Low', 'Medium', 'High') DEFAULT 'Medium',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    trend_direction VARCHAR(50),
-    trend_score DECIMAL(3,1)
+    topic VARCHAR(255) NOT NULL
 );
+
+ALTER TABLE trending_keywords ADD COLUMN IF NOT EXISTS search_volume INT;
+ALTER TABLE trending_keywords ADD COLUMN IF NOT EXISTS competition_level ENUM('Low', 'Medium', 'High') DEFAULT 'Medium';
+ALTER TABLE trending_keywords ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE trending_keywords ADD COLUMN IF NOT EXISTS trend_direction VARCHAR(50);
+ALTER TABLE trending_keywords ADD COLUMN IF NOT EXISTS trend_score DECIMAL(3,1);
 
 CREATE TABLE IF NOT EXISTS blog_titles (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    title VARCHAR(500) NOT NULL,
-    topic VARCHAR(255),
-    keywords VARCHAR(500),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ctr_score DECIMAL(5,2) DEFAULT 0,
-    used BOOLEAN DEFAULT FALSE,
-    used_at TIMESTAMP NULL
+    title VARCHAR(500) NOT NULL
 );
+
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS topic VARCHAR(255);
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS keywords VARCHAR(500);
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS ctr_score DECIMAL(5,2) DEFAULT 0;
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS used BOOLEAN DEFAULT FALSE;
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS used_at TIMESTAMP NULL;
 
 CREATE TABLE IF NOT EXISTS blog_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(500),
     topic VARCHAR(255),
-    content LONGTEXT,
-    status ENUM('draft', 'pending', 'published', 'failed') DEFAULT 'draft',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    plagiarism_score DECIMAL(5,2) DEFAULT 0,
-    ai_detection_score DECIMAL(5,2) DEFAULT 0,
-    version INT DEFAULT 1,
-    published_at TIMESTAMP NULL,
-    published_to_wordpress_at TIMESTAMP NULL,
-    qa_check_passed BOOLEAN DEFAULT FALSE,
-    qa_check_report LONGTEXT,
-    rollback_reason VARCHAR(500),
-    rollback_required_at TIMESTAMP NULL,
-    slug VARCHAR(500),
-    wordpress_post_id VARCHAR(100),
-    word_count INT DEFAULT 0,
-    publish_date DATE,
-    error_handler_needed BOOLEAN DEFAULT FALSE,
-    error_message LONGTEXT,
-    error_type VARCHAR(100)
+    content LONGTEXT
 );
+
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS status ENUM('draft', 'pending', 'published', 'failed') DEFAULT 'draft';
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS plagiarism_score DECIMAL(5,2) DEFAULT 0;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS ai_detection_score DECIMAL(5,2) DEFAULT 0;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS published_at TIMESTAMP NULL;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS published_to_wordpress_at TIMESTAMP NULL;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS qa_check_passed BOOLEAN DEFAULT FALSE;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS qa_check_report LONGTEXT;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS rollback_reason VARCHAR(500);
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS rollback_required_at TIMESTAMP NULL;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS slug VARCHAR(500);
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS wordpress_post_id VARCHAR(100);
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS word_count INT DEFAULT 0;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS publish_date DATE;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS error_handler_needed BOOLEAN DEFAULT FALSE;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS error_message LONGTEXT;
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS error_type VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS version_history (
     id INT PRIMARY KEY AUTO_INCREMENT,
