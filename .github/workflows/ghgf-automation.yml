@@ -114,7 +114,7 @@ jobs:
       continue-on-error: true
     
     - name: Run GHGF Pipeline
-      run: python run_full_pipeline.py
+      run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
       working-directory: ./
     
     - name: Upload error logs
@@ -122,8 +122,11 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: pipeline-error-logs
-        path: error_log_*.txt
+        path: |
+          error_log_*.txt
+          pipeline_output.log
         retention-days: 30
+      continue-on-error: true
     
     - name: Workflow status
       if: always()
