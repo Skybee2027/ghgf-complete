@@ -29,7 +29,7 @@ env:
   # WordPress Configuration (for publishing)
   WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
   WORDPRESS_USER: ${{ secrets.WORDPRESS_USER || 'api_user' }}
-  WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+  WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD || '' }}
 
 jobs:
   run-pipeline:
@@ -62,6 +62,17 @@ jobs:
         [ -n "$GEMINI_API_KEY" ] && echo "✅ GEMINI_API_KEY is set"
         [ -n "$COHERE_API_KEY" ] && echo "✅ COHERE_API_KEY is set"
         [ -n "$OPENAI_API_KEY" ] && echo "✅ OPENAI_API_KEY is set"
+
+        echo ""
+        echo "Checking WordPress Publishing Configuration..."
+        if [ -z "$WORDPRESS_PASSWORD" ]; then
+          echo "⚠️  WARNING: WORDPRESS_PASSWORD is not set - R31 will NOT publish posts to WordPress"
+          echo "         To enable publishing, set WORDPRESS_PASSWORD in GitHub Secrets"
+        else
+          echo "✅ WORDPRESS_PASSWORD is set"
+          echo "✅ WORDPRESS_URL is set to: $WORDPRESS_URL"
+          echo "✅ WORDPRESS_USER is set to: $WORDPRESS_USER"
+        fi
         echo "✅ Database and LLM configuration verified"
     
     - name: Install dependencies
