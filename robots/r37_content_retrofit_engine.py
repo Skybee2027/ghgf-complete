@@ -30,15 +30,21 @@ class ContentRetrofitEngine:
         self.db_password = os.getenv('DB_PASSWORD', '')
         self.db_name = os.getenv('DB_NAME', 'u853068512_ghgf_blogging')
 
-        # AI APIs
-        self.groq_api_key = os.getenv('GROQ_API_KEY', '')
-        self.openai_api_key = os.getenv('OPENAI_API_KEY', '')
-        self.cohere_api_key = os.getenv('COHERE_API_KEY', '')
-        self.google_api_key = os.getenv('GOOGLE_API_KEY', '')
+        # AI APIs - all optional, using fallback chain
+        self.groq_key = os.getenv('GROQ_API_KEY')
+        self.gemini_key = os.getenv('GEMINI_API_KEY')
+        self.cohere_key = os.getenv('COHERE_API_KEY')
+        self.openai_key = os.getenv('OPENAI_API_KEY')
 
         # Model configuration - from environment variables only (no hardcoded defaults)
         self.groq_model = os.getenv('GROQ_MODEL')
+        self.gemini_model = os.getenv('GEMINI_MODEL')
+        self.cohere_model = os.getenv('COHERE_MODEL')
         self.openai_model = os.getenv('OPENAI_MODEL')
+
+        # Check that at least ONE API key is available
+        if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
+            logger.warning("No LLM API keys found - retrofit engine will skip AI enhancement")
 
         # Affiliate APIs
         self.cj_api_key = os.getenv('CJ_API_KEY', '')
@@ -47,6 +53,7 @@ class ContentRetrofitEngine:
         self.connection = None
         self.posts_processed = 0
         self.posts_enhanced = 0
+        self.provider_used = None
 
         logger.info("Content Retrofit Engine initialized")
 
@@ -72,114 +79,158 @@ class ContentRetrofitEngine:
         if self.connection and self.connection.is_connected():
             self.connection.close()
 
-    def get_available_model(self):
-        """Get first available model from Groq, Cohere, or OpenAI"""
-        models = []
+    def get_enhancement_prompt(self, content, title):
+        """Generate the shared enhancement prompt for all providers"""
+        prompt = f"""Enhance this blog post with:
+1. Better formatting and readability
+2. Key takeaways section
+3. Call-to-action for related products
 
-        # Try Groq
-        if self.groq_api_key:
-            try:
-                response = requests.get(
-                    'https://api.groq.com/openai/v1/models',
-                    headers={'Authorization': f'Bearer {self.groq_api_key}'},
-                    timeout=5
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if 'data' in data and len(data['data']) > 0:
-                        model_id = data['data'][0].get('id', self.groq_model)
-                        return ('groq', model_id)
-            except:
-                pass
+Title: {title}
+Content: {content[:1000]}...
 
-        # Try Cohere
-        if self.cohere_api_key:
-            return ('cohere', None)  # Cohere doesn't need model selection
+Return enhanced content only."""
+        return prompt
 
-        # Try OpenAI
-        if self.openai_api_key:
-            return ('openai', self.openai_model)
-
-        return (None, None)
-
-    def enhance_with_ai(self, content, title):
-        """Enhance content with AI - uses available provider"""
-        provider, model = self.get_available_model()
-
-        if not provider:
-            logger.warning("No AI provider available")
-            return content
+    def enhance_with_groq(self, content, title):
+        """Enhance content using Groq"""
+        if not self.groq_key:
+            logger.debug("Groq API key not available, skipping Groq provider")
+            return None
 
         try:
-            enhancement_prompt = f"""
-            Enhance this blog post with:
-            1. Better formatting and readability
-            2. Key takeaways section
-            3. Call-to-action for related products
+            from groq import Groq
 
-            Title: {title}
-            Content: {content[:1000]}...
+            logger.debug("Attempting Groq provider for content enhancement...")
+            client = Groq(api_key=self.groq_key)
+            prompt = self.get_enhancement_prompt(content, title)
 
-            Return enhanced content only.
-            """
+            response = client.chat.completions.create(
+                model=self.groq_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500,
+                temperature=0.7
+            )
 
-            if provider == 'groq':
-                headers = {
-                    'Authorization': f'Bearer {self.groq_api_key}',
-                    'Content-Type': 'application/json'
-                }
-                payload = {
-                    'model': model,
-                    'messages': [{'role': 'user', 'content': enhancement_prompt}],
-                    'max_tokens': 500
-                }
-                response = requests.post(
-                    'https://api.groq.com/openai/v1/chat/completions',
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    return response.json()['choices'][0]['message']['content']
-
-            elif provider == 'cohere':
-                headers = {'Authorization': f'Bearer {self.cohere_api_key}'}
-                payload = {
-                    'message': enhancement_prompt,
-                    'chat_history': []
-                }
-                response = requests.post(
-                    'https://api.cohere.com/v1/chat',
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    return response.json()['text']
-
-            elif provider == 'openai':
-                headers = {
-                    'Authorization': f'Bearer {self.openai_api_key}',
-                    'Content-Type': 'application/json'
-                }
-                payload = {
-                    'model': model,
-                    'messages': [{'role': 'user', 'content': enhancement_prompt}],
-                    'max_tokens': 500
-                }
-                response = requests.post(
-                    'https://api.openai.com/v1/chat/completions',
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    return response.json()['choices'][0]['message']['content']
-
+            if response.choices and response.choices[0].message.content:
+                self.provider_used = "Groq"
+                return response.choices[0].message.content.strip()
+            return None
+        except ImportError:
+            logger.warning("Groq library not installed")
+            return None
         except Exception as e:
-            logger.error(f"Error enhancing content: {e}")
+            logger.debug(f"Groq failed: {type(e).__name__}: {str(e)}")
+            return None
 
-        return content
+    def enhance_with_gemini(self, content, title):
+        """Enhance content using Gemini"""
+        if not self.gemini_key:
+            logger.debug("Gemini API key not available, skipping Gemini provider")
+            return None
+
+        try:
+            import google.generativeai as genai
+
+            logger.debug("Attempting Gemini provider for content enhancement...")
+            genai.configure(api_key=self.gemini_key)
+            prompt = self.get_enhancement_prompt(content, title)
+
+            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
+            response = model.generate_content(prompt)
+
+            if response.text:
+                self.provider_used = "Gemini"
+                return response.text.strip()
+            return None
+        except ImportError:
+            logger.warning("Google Generative AI library not installed")
+            return None
+        except Exception as e:
+            logger.debug(f"Gemini failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def enhance_with_cohere(self, content, title):
+        """Enhance content using Cohere"""
+        if not self.cohere_key:
+            logger.debug("Cohere API key not available, skipping Cohere provider")
+            return None
+
+        try:
+            import cohere
+
+            logger.debug("Attempting Cohere provider for content enhancement...")
+            client = cohere.ClientV2(api_key=self.cohere_key)
+            prompt = self.get_enhancement_prompt(content, title)
+
+            response = client.generate(
+                model=self.cohere_model,
+                prompt=prompt,
+                max_tokens=500,
+                temperature=0.7
+            )
+
+            if response.text:
+                self.provider_used = "Cohere"
+                return response.text.strip()
+            return None
+        except ImportError:
+            logger.warning("Cohere library not installed")
+            return None
+        except Exception as e:
+            logger.debug(f"Cohere failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def enhance_with_openai(self, content, title):
+        """Enhance content using OpenAI"""
+        if not self.openai_key:
+            logger.debug("OpenAI API key not available, skipping OpenAI provider")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            logger.debug("Attempting OpenAI provider for content enhancement...")
+            client = OpenAI(api_key=self.openai_key)
+            prompt = self.get_enhancement_prompt(content, title)
+
+            response = client.chat.completions.create(
+                model=self.openai_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500,
+                temperature=0.7
+            )
+
+            if response.choices and response.choices[0].message.content:
+                self.provider_used = "OpenAI"
+                return response.choices[0].message.content.strip()
+            return None
+        except ImportError:
+            logger.warning("OpenAI library not installed")
+            return None
+        except Exception as e:
+            logger.debug(f"OpenAI failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def enhance_with_ai(self, content, title):
+        """Enhance content with AI using multi-provider fallback chain"""
+        # Try all providers in order
+        enhanced = self.enhance_with_groq(content, title)
+
+        if not enhanced:
+            enhanced = self.enhance_with_gemini(content, title)
+
+        if not enhanced:
+            enhanced = self.enhance_with_cohere(content, title)
+
+        if not enhanced:
+            enhanced = self.enhance_with_openai(content, title)
+
+        if not enhanced:
+            logger.warning("All providers failed - unable to enhance content")
+            return content
+
+        return enhanced
 
     def get_unretrofitted_posts(self, batch_size=50):
         """Get posts that haven't been retrofitted yet"""

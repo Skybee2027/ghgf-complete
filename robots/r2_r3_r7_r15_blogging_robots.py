@@ -31,7 +31,7 @@ class BloggingRobot:
 
         # API Keys
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.google_key = os.getenv("GOOGLE_API_KEY")
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.cohere_key = os.getenv("COHERE_API_KEY")
         self.unsplash_key = os.getenv("UNSPLASH_API_KEY")
@@ -40,8 +40,8 @@ class BloggingRobot:
 
         # Model configuration (from environment variables - no hardcoded defaults)
         self.groq_model = os.getenv("GROQ_MODEL")
-        self.openai_model = os.getenv("OPENAI_MODEL")
         self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
         self.cohere_model = os.getenv("COHERE_MODEL")
 
         self.topics = [
@@ -123,6 +123,33 @@ class BloggingRobot:
             print(f"⚠️  Groq generation failed: {str(e)[:60]}")
             return None
 
+    def generate_content_gemini(self, title):
+        """Generate blog content using Gemini"""
+        if not self.gemini_key:
+            return None
+
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=self.gemini_key)
+
+            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
+            response = model.generate_content(f"""Write a detailed, engaging blog post about: {title}
+
+                Include:
+                - 2-3 paragraph introduction
+                - 4-5 main sections with headers
+                - Practical tips and actionable advice
+                - Conclusion with call-to-action
+
+                Write in HTML format with <h2>, <h3>, <p>, <ul>, <li> tags.""")
+
+            if response.text:
+                return response.text
+            return None
+        except Exception as e:
+            print(f"⚠️  Gemini generation failed: {str(e)[:60]}")
+            return None
+
     def generate_content_openai(self, title):
         """Generate blog content using OpenAI"""
         if not self.openai_key:
@@ -187,14 +214,13 @@ class BloggingRobot:
             return None
 
     def generate_blog_content(self, title):
-        """Generate blog content using available APIs"""
+        """Generate blog content using multi-provider fallback chain"""
         generators = [
             ("Groq", self.generate_content_groq),
-            ("OpenAI", self.generate_content_openai),
+            ("Gemini", self.generate_content_gemini),
             ("Cohere", self.generate_content_cohere),
+            ("OpenAI", self.generate_content_openai),
         ]
-
-        random.shuffle(generators)
 
         for name, generator in generators:
             print(f"📝 Generating content with {name}...", end=" ")
