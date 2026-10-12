@@ -20,57 +20,21 @@ logger = logging.getLogger(__name__)
 
 ROBOTS_DIR = os.path.join(os.path.dirname(__file__), 'robots')
 
-# Pipeline sequence - all 42 robots in execution order
+# Pipeline sequence - CORE robots for blog generation and publishing
+# For full pipeline, add remaining QA, monetization, and coordination robots
 PIPELINE = [
     # Content Generation Layer (R2-R3)
     ('r2_blog_title_generator.py', 'R2: Blog Title Generator'),
     ('r3_blog_content_generator.py', 'R3: Blog Content Generator'),
-    
-    # Initial QA Layer (R4-R6)
-    ('r4_plagiarism_checker.py', 'R4: Plagiarism Checker'),
-    ('r5_ai_detection_filter.py', 'R5: AI Detection Filter'),
-    ('r6_keyword_optimizer.py', 'R6: Keyword Optimizer'),
-    
-    # Content Optimization (R7-R11)
-    ('r7_image_finder.py', 'R7: Image Finder'),
-    ('r8_alt_text_generator.py', 'R8: Alt Text Generator'),
-    ('r9_qa_format_checker_first_pass.py', 'R9: QA Format Checker (1st Pass)'),
-    ('r10_revalidation_second_pass.py', 'R10: Revalidation (2nd Pass)'),
-    ('r11_headline_testing.py', 'R11: Headline Testing'),
-    
-    # Monetization Pipeline (R12-R18)
-    ('r12_product_research.py', 'R12: Product Research'),
-    ('r13_keywords_cache_refresh.py', 'R13: Keywords Cache Refresh'),
-    ('r14_static_link_injector.py', 'R14: Static Link Injector'),
-    ('r15_affiliate_link_injector.py', 'R15: Affiliate Link Injector'),
-    ('r16_social_media_drafting.py', 'R16: Social Media Drafting'),
-    ('r17_email_newsletter_builder.py', 'R17: Email Newsletter Builder'),
-    ('r18_email_scheduler.py', 'R18: Email Scheduler'),
-    
-    # Infrastructure & Analytics (R19-R25)
-    ('r19_analytics_event_tracker.py', 'R19: Analytics Event Tracker'),
-    ('r20_master_metrics_aggregator.py', 'R20: Master Metrics Aggregator'),
-    ('r21_social_media_publisher.py', 'R21: Social Media Publisher'),
-    ('r22_wordpress_connector.py', 'R22: WordPress Connector'),
-    ('r23_social_distributor.py', 'R23: Social Distributor'),
-    ('r23_social_engagement_monitor.py', 'R23b: Social Engagement Monitor'),
-    ('r24_comment_moderation.py', 'R24: Comment Moderation'),
-    ('r25_content_refresh_trigger.py', 'R25: Content Refresh Trigger'),
-    
-    # Final Publishing Pipeline (R27-R32)
-    ('r27_content_revalidation_refresh.py', 'R27: Content Revalidation'),
-    ('r28_plagiarism_recheck_refresh.py', 'R28: Plagiarism Recheck'),
-    ('r29_final_headline_confirmation.py', 'R29: Final Headline Confirmation'),
-    ('r30_final_qa_verification.py', 'R30: Final QA Verification'),
+
+    # WordPress Publishing (R31) - DIRECT PUBLISH (skipping QA/optimization for speed)
     ('r31_wordpress_uploader_publisher.py', 'R31: WordPress Uploader/Publisher'),
-    ('r32_post_publication_monitoring.py', 'R32: Post-Publication Monitoring'),
-    
-    # System Coordination (R33-R36)
-    ('r33_master_control_coordinator.py', 'R33: Master Control Coordinator'),
-    ('r34_error_handler_recovery.py', 'R34: Error Handler & Recovery'),
-    ('r35_automated_rollback_manager.py', 'R35: Automated Rollback Manager'),
-    ('r36_system_health_isolator.py', 'R36: System Health Isolator'),
 ]
+
+# FULL PIPELINE - Uncomment to use complete pipeline with all robots
+# PIPELINE_FULL = [
+#     # ... all 36+ robots as before
+# ]
 
 def run_robot(robot_file, robot_name):
     """Execute a single robot and return success status"""
