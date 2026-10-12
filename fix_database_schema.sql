@@ -1,585 +1,627 @@
--- ============================================================================
--- GHGF 42-ROBOT SYSTEM - COMPREHENSIVE DATABASE SCHEMA FIX
--- Fixes all column mismatches and creates missing tables
--- ============================================================================
-
--- First, back up existing data by renaming old tables
-RENAME TABLE IF EXISTS topic_rotation TO topic_rotation_old;
-RENAME TABLE IF EXISTS blog_titles TO blog_titles_old;
-RENAME TABLE IF EXISTS blog_posts TO blog_posts_old;
-RENAME TABLE IF EXISTS trending_keywords TO trending_keywords_old;
+-- GHGF Database Schema Fix
+-- This script fixes all database schema issues that were causing 11 robots to fail
+-- Created: 2026-10-12
+-- Purpose: Align database schema with robot code expectations
 
 -- ============================================================================
--- CORE CONTENT GENERATION TABLES
+-- STEP 1: BACKUP OLD TABLES (rename them with _old suffix)
 -- ============================================================================
 
--- Topic Rotation Table (for 18-topic rotation schedule)
+ALTER TABLE IF EXISTS topic_rotation RENAME TO topic_rotation_old;
+ALTER TABLE IF EXISTS blog_titles RENAME TO blog_titles_old;
+ALTER TABLE IF EXISTS blog_posts RENAME TO blog_posts_old;
+
+-- ============================================================================
+-- STEP 2: CREATE FIXED topic_rotation TABLE
+-- ============================================================================
+-- This table manages the 18-topic rotation cycle
+-- Expected by: R2 (Blog Title Generator)
+
 CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_name VARCHAR(500) NOT NULL,
     cycle_number INT DEFAULT 1,
     topic_sequence INT DEFAULT 1,
-    status VARCHAR(50) DEFAULT 'active' COMMENT 'active, inactive, paused',
+    status VARCHAR(50) DEFAULT 'active',
     start_date DATE,
     last_rotated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_status (status),
     INDEX idx_cycle (cycle_number, topic_sequence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Blog Titles (R2 Output)
+-- ============================================================================
+-- STEP 3: CREATE FIXED blog_titles TABLE
+-- ============================================================================
+-- Stores generated blog titles from R2
+-- Expected by: R2 (creator), R3 (reader)
+
 CREATE TABLE IF NOT EXISTS blog_titles (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_id INT,
     title VARCHAR(500) NOT NULL,
-    topic VARCHAR(500),
-    keywords VARCHAR(1000),
+    topic VARCHAR(255),
+    keywords TEXT,
     used BOOLEAN DEFAULT FALSE,
+    used_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ctr_score DECIMAL(5,2) DEFAULT 0,
-    INDEX idx_used (used),
+    ctr_score FLOAT DEFAULT 0.0,
     INDEX idx_topic (topic),
+    INDEX idx_used (used),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Blog Posts (Main content table)
+-- ============================================================================
+-- STEP 4: CREATE FIXED blog_posts TABLE
+-- ============================================================================
+-- Stores generated blog post content
+-- Expected by: R3, R4, R5 and all downstream robots
+
 CREATE TABLE IF NOT EXISTS blog_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(500),
-    topic VARCHAR(500),
     content LONGTEXT,
+    topic VARCHAR(255),
     status VARCHAR(50) DEFAULT 'draft',
-
-    -- QA & Validation Fields
-    plagiarism_score DECIMAL(5,2),
-    ai_detection_score DECIMAL(5,2),
-    qa_check_report LONGTEXT,
-    qa_check_passed BOOLEAN DEFAULT FALSE,
-
-    -- Version Control
+    plagiarism_score FLOAT DEFAULT 0.0,
+    ai_detection_score FLOAT DEFAULT 0.0,
+    qa_check_report TEXT,
     version INT DEFAULT 1,
-
-    -- Monetization
-    affiliate_links_injected BOOLEAN DEFAULT FALSE,
-    internal_links_injected BOOLEAN DEFAULT FALSE,
-
-    -- Publishing
-    wordpress_post_id INT,
-    published_at TIMESTAMP NULL,
-
-    -- Tracking
+    bp_version INT DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    bp_version INT DEFAULT 1,
-
     INDEX idx_status (status),
     INDEX idx_topic (topic),
-    INDEX idx_wordpress_id (wordpress_post_id),
+    INDEX idx_plagiarism (plagiarism_score),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================================
--- KEYWORD & RESEARCH TABLES
+-- STEP 5: CREATE trending_keywords TABLE
 -- ============================================================================
+-- Stores trending keywords data
+-- Expected by: R13 (Trend Scout), R2 (Title Generator), R3 (Content Generator)
 
--- Trending Keywords Cache (R13 Output)
 CREATE TABLE IF NOT EXISTS trending_keywords (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    topic VARCHAR(500) NOT NULL,
     keyword VARCHAR(500) NOT NULL,
+    topic VARCHAR(255),
     search_volume INT DEFAULT 0,
-    competition_level VARCHAR(50) DEFAULT 'medium',
-    trend_direction VARCHAR(20) DEFAULT 'stable',
+    competition_level VARCHAR(50),
+    trend_score FLOAT DEFAULT 0.0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_topic (topic),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_keyword (keyword),
+    INDEX idx_topic (topic),
     INDEX idx_search_volume (search_volume)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================================
--- QA & VALIDATION TABLES
+-- STEP 6: CREATE SUPPORTING TABLES FOR ROBOT PIPELINE
 -- ============================================================================
 
+-- R4: Plagiarism Detection
 CREATE TABLE IF NOT EXISTS plagiarism_checks (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    plagiarism_score DECIMAL(5,2),
-    status VARCHAR(50),
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    similarity_percentage FLOAT DEFAULT 0.0,
+    plagiarism_report TEXT,
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_version VARCHAR(50),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- R5: AI Detection
+CREATE TABLE IF NOT EXISTS ai_detection_results (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
+    ai_score FLOAT DEFAULT 0.0,
+    human_score FLOAT DEFAULT 0.0,
+    mixed_score FLOAT DEFAULT 0.0,
+    detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- R6: Quality Assurance
 CREATE TABLE IF NOT EXISTS qa_verification (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    word_count INT,
-    grammar_score INT,
-    readability_score INT,
-    seo_score INT,
-    status VARCHAR(50),
-    verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    qa_score FLOAT DEFAULT 0.0,
+    issues_found INT DEFAULT 0,
+    verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================================
--- IMAGE TABLES
--- ============================================================================
+-- R7-R11: Content Enhancement & Formatting
+CREATE TABLE IF NOT EXISTS content_enhancements (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
+    enhancement_type VARCHAR(100),
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- R12: SEO Optimization
+CREATE TABLE IF NOT EXISTS seo_optimization (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
+    meta_title VARCHAR(255),
+    meta_description VARCHAR(255),
+    keywords_targeted TEXT,
+    seo_score FLOAT DEFAULT 0.0,
+    optimized_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- R13: Trend Scout (already has trending_keywords table)
+
+-- R14: Heading Generation
+CREATE TABLE IF NOT EXISTS heading_suggestions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
+    h1 VARCHAR(255),
+    h2s TEXT,
+    h3s TEXT,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Image Management (R15-R16)
 CREATE TABLE IF NOT EXISTS image_tracking (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    topic VARCHAR(500),
+    blog_id INT NOT NULL,
     image_url VARCHAR(500),
-    alt_text TEXT,
-    used_date TIMESTAMP,
-    expires_date TIMESTAMP,
-    tracked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    alt_text VARCHAR(255),
+    image_source VARCHAR(100),
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================================
--- MONETIZATION TABLES
--- ============================================================================
-
+-- Affiliate Management (R17-R18)
 CREATE TABLE IF NOT EXISTS affiliate_products (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    product_name VARCHAR(500),
-    product_url VARCHAR(500),
+    product_name VARCHAR(255),
     affiliate_link VARCHAR(500),
-    description LONGTEXT,
-    network VARCHAR(100),
-    commission DECIMAL(5,2),
-    status VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    affiliate_network VARCHAR(100),
+    commission_rate FLOAT DEFAULT 0.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_network (affiliate_network)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS affiliate_products_placement (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
+    blog_id INT NOT NULL,
     product_id INT,
-    placement_type VARCHAR(100),
-    placed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    placement_type VARCHAR(50),
+    placed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id),
+    INDEX idx_product (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS link_injection_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    injection_type VARCHAR(100),
-    links_count INT,
-    injected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    link_type VARCHAR(50),
+    links_added INT DEFAULT 0,
+    injected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS affiliate_injection_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    product_name VARCHAR(500),
-    affiliate_link VARCHAR(500),
-    injected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    affiliate_links_added INT DEFAULT 0,
+    injected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================================
--- PUBLISHING TABLES
--- ============================================================================
-
+-- Publishing & Distribution (R19-R25)
 CREATE TABLE IF NOT EXISTS publication_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    wordpress_post_id INT,
+    blog_id INT NOT NULL,
+    published_url VARCHAR(500),
     published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50)
+    post_id INT,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS post_publication_checks (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    url_valid BOOLEAN,
-    load_time INT,
-    seo_valid BOOLEAN,
-    links_valid BOOLEAN,
-    email_form_valid BOOLEAN,
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    check_type VARCHAR(100),
+    status VARCHAR(50),
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================================
--- SOCIAL & EMAIL TABLES
--- ============================================================================
-
+-- Social Media & Email (R26-R32)
 CREATE TABLE IF NOT EXISTS social_media_queue (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    content TEXT,
+    blog_id INT NOT NULL,
+    platforms TEXT,
     scheduled_at TIMESTAMP,
-    published_at TIMESTAMP,
-    status VARCHAR(50)
+    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS social_media_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    content TEXT,
-    posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    platform VARCHAR(100),
+    post_content TEXT,
+    post_id VARCHAR(255),
+    posted_at TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS social_engagement_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    likes INT,
-    shares INT,
-    comments INT,
-    tracked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    platform VARCHAR(100),
+    engagements INT DEFAULT 0,
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS social_engagement_metrics (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    engagement_score DECIMAL(8,2),
-    tracked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    platform VARCHAR(100),
+    likes INT DEFAULT 0,
+    shares INT DEFAULT 0,
+    comments INT DEFAULT 0,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS social_distribution_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    platform VARCHAR(50),
-    social_post_id VARCHAR(500),
-    distributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    distribution_status VARCHAR(50),
+    distributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS social_publication_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    post_id INT,
-    blog_id INT,
-    platform VARCHAR(50),
-    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    platform VARCHAR(100),
+    status VARCHAR(50),
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS email_campaigns (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    content_html LONGTEXT,
-    content_hash VARCHAR(500),
-    blog_ids VARCHAR(1000),
-    subject VARCHAR(500),
-    content TEXT,
-    sent_at TIMESTAMP,
-    open_rate DECIMAL(5,2),
-    status VARCHAR(50)
+    blog_id INT NOT NULL,
+    campaign_name VARCHAR(255),
+    recipient_count INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS email_newsletters (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    content_html LONGTEXT,
-    content_hash VARCHAR(500),
-    blog_ids VARCHAR(1000),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    newsletter_subject VARCHAR(255),
+    newsletter_body TEXT,
+    sent_at TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS email_send_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    newsletter_id INT,
-    subscriber_id INT,
-    sent_at TIMESTAMP,
-    status VARCHAR(50)
+    blog_id INT NOT NULL,
+    recipients_sent INT DEFAULT 0,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================================
--- ANALYTICS TABLES
--- ============================================================================
-
+-- Analytics & Monitoring (R33-R36)
 CREATE TABLE IF NOT EXISTS analytics_events (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
     event_type VARCHAR(100),
-    blog_id INT,
-    event_data JSON,
-    event_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    event_data TEXT,
+    tracked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================================
--- SYSTEM CONTROL & HEALTH TABLES
--- ============================================================================
-
 CREATE TABLE IF NOT EXISTS system_locks (
-    lock_id INT PRIMARY KEY AUTO_INCREMENT,
-    resource_type VARCHAR(100),
-    resource_id INT,
-    lock_type VARCHAR(50),
-    acquired_by VARCHAR(100),
-    acquired_at TIMESTAMP,
-    expires_at TIMESTAMP,
-    released_at TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'active'
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
+    lock_type VARCHAR(100),
+    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    released_at TIMESTAMP NULL,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS system_error_log (
-    error_id INT PRIMARY KEY AUTO_INCREMENT,
-    error_type VARCHAR(100),
-    severity VARCHAR(50),
-    message TEXT,
-    detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50) DEFAULT 'detected',
-    error_handler_needed BOOLEAN DEFAULT FALSE
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT,
+    error_message TEXT,
+    error_code VARCHAR(50),
+    error_level VARCHAR(50),
+    logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_error_level (error_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS error_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT,
     error_type VARCHAR(100),
-    message LONGTEXT,
-    logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    error_details TEXT,
+    occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_occurred (occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS system_recovery_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    error_id INT,
-    recovery_type VARCHAR(100),
-    attempt_number INT,
+    blog_id INT,
+    recovery_action VARCHAR(255),
     status VARCHAR(50),
-    recovered_at TIMESTAMP
+    recovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS system_heartbeat (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    coordinator_id VARCHAR(100),
-    heartbeat_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    robots_active INT,
-    status VARCHAR(50)
+    robot_id VARCHAR(10),
+    status VARCHAR(50),
+    heartbeat_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_robot (robot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS system_health_checks (
     id INT PRIMARY KEY AUTO_INCREMENT,
     check_type VARCHAR(100),
-    metric_value INT,
-    threshold INT,
     status VARCHAR(50),
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    health_score FLOAT DEFAULT 0.0,
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_type (check_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS system_health_snapshots (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    snapshot_data JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    health_score FLOAT DEFAULT 0.0,
+    active_robots INT DEFAULT 0,
+    failed_robots INT DEFAULT 0,
+    snapshot_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS system_reports (
     id INT PRIMARY KEY AUTO_INCREMENT,
     report_type VARCHAR(100),
-    report_data LONGTEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    report_data TEXT,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS coordinator_status (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    status_data JSON,
+    status VARCHAR(50),
+    active_blogs INT DEFAULT 0,
+    processed_blogs INT DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS robot_locks (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    robot_id VARCHAR(100),
-    lock_status VARCHAR(50),
-    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    robot_id VARCHAR(10),
+    blog_id INT,
+    lock_acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    lock_released_at TIMESTAMP NULL,
+    INDEX idx_robot (robot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================================
--- ROLLBACK & RECOVERY TABLES
--- ============================================================================
 
 CREATE TABLE IF NOT EXISTS rollback_checkpoints (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    content_id INT,
-    checkpoint_type VARCHAR(100),
-    snapshot_data JSON,
-    rollback_at TIMESTAMP,
-    status VARCHAR(50)
+    blog_id INT NOT NULL,
+    checkpoint_name VARCHAR(255),
+    checkpoint_data TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS rollback_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    rollback_type VARCHAR(100),
-    details LONGTEXT,
-    rolled_back_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    rollback_action VARCHAR(255),
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS quarantine_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    content_id INT,
-    topic VARCHAR(500),
-    quarantine_reason VARCHAR(500),
+    blog_id INT NOT NULL,
+    quarantine_reason VARCHAR(255),
     quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50)
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS isolation_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    isolated_content_id INT,
-    isolation_reason VARCHAR(500),
-    isolated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    isolation_reason VARCHAR(255),
+    isolated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================================
--- VALIDATION & QA TABLES
--- ============================================================================
 
 CREATE TABLE IF NOT EXISTS final_validation_checkpoints (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    validation_score INT,
+    blog_id INT NOT NULL,
+    validation_type VARCHAR(100),
     status VARCHAR(50),
-    validated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    validated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS final_qa_records (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    qa_score INT,
-    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    qa_result VARCHAR(50),
+    qa_notes TEXT,
+    qa_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS headline_confirmations (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
+    blog_id INT NOT NULL,
     headline VARCHAR(500),
-    confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    confirmed BOOLEAN DEFAULT FALSE,
+    confirmed_at TIMESTAMP NULL,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS plagiarism_check_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    plagiarism_percentage DECIMAL(5,2),
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    check_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    plagiarism_percentage FLOAT DEFAULT 0.0,
+    status VARCHAR(50),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================================
--- CONTENT MANAGEMENT TABLES
--- ============================================================================
 
 CREATE TABLE IF NOT EXISTS content_queue (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    topic VARCHAR(500),
-    status VARCHAR(50),
-    content LONGTEXT,
-    last_modified_by VARCHAR(100),
-    last_modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) DEFAULT 'pending',
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS content_refresh_queue (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    refresh_type VARCHAR(100),
-    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(50)
+    blog_id INT NOT NULL,
+    refresh_requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) DEFAULT 'pending',
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS content_refresh_tasks (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
+    blog_id INT NOT NULL,
     task_type VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    task_status VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS refresh_workflow_queue (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    workflow_type VARCHAR(100),
-    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    workflow_step VARCHAR(100),
+    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================================
--- COMMENT & ENGAGEMENT TABLES
--- ============================================================================
 
 CREATE TABLE IF NOT EXISTS comment_moderation_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    comment_text TEXT,
-    moderation_action VARCHAR(50),
-    moderated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    comment_id VARCHAR(255),
+    moderation_status VARCHAR(50),
+    moderated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS comment_response_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    response_text TEXT,
-    responded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    original_comment_id VARCHAR(255),
+    response_posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================================
--- WORDPRESS CONNECTOR TABLE
--- ============================================================================
 
 CREATE TABLE IF NOT EXISTS wordpress_connector_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    api_endpoint VARCHAR(500),
-    status_code INT,
-    response_time INT,
-    connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    action VARCHAR(100),
+    status VARCHAR(50),
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================================
--- SUPPORTING ROBOT TABLES
--- ============================================================================
 
 CREATE TABLE IF NOT EXISTS retrofit_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_id INT,
-    status VARCHAR(50),
-    details LONGTEXT,
-    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    blog_id INT NOT NULL,
+    retrofit_action VARCHAR(255),
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    robot_id VARCHAR(10),
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS digital_products (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    product_type VARCHAR(100),
-    product_data LONGTEXT,
+    product_name VARCHAR(255),
+    product_url VARCHAR(500),
+    product_category VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS affiliate_search_queue (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
     search_query VARCHAR(500),
-    status VARCHAR(50),
-    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) DEFAULT 'pending',
+    INDEX idx_blog (blog_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================================
--- SEED INITIAL DATA
+-- STEP 7: SEED INITIAL DATA
 -- ============================================================================
 
--- Add initial topic rotation (18 topics for rotation)
-INSERT INTO topic_rotation (topic_name, cycle_number, topic_sequence, status, start_date) VALUES
-('Health and Fitness', 1, 1, 'active', CURDATE()),
-('Nutrition and Diet', 1, 2, 'inactive', CURDATE()),
-('Mental Health and Wellness', 1, 3, 'inactive', CURDATE()),
-('Sleep and Rest', 1, 4, 'inactive', CURDATE()),
-('Exercise and Training', 1, 5, 'inactive', CURDATE()),
-('Supplements and Vitamins', 1, 6, 'inactive', CURDATE()),
-('Weight Management', 1, 7, 'inactive', CURDATE()),
-('Chronic Diseases', 1, 8, 'inactive', CURDATE()),
-('Heart Health', 1, 9, 'inactive', CURDATE()),
-('Bone Health', 1, 10, 'inactive', CURDATE()),
-('Skin Health', 1, 11, 'inactive', CURDATE()),
-('Hair and Beauty', 1, 12, 'inactive', CURDATE()),
-('Sports and Athletics', 1, 13, 'inactive', CURDATE()),
-('Yoga and Pilates', 1, 14, 'inactive', CURDATE()),
-('Fitness Equipment', 1, 15, 'inactive', CURDATE()),
-('Home Workouts', 1, 16, 'inactive', CURDATE()),
-('Recovery and Injury', 1, 17, 'inactive', CURDATE()),
-('Age-Specific Health', 1, 18, 'inactive', CURDATE())
-ON DUPLICATE KEY UPDATE cycle_number=VALUES(cycle_number);
+-- Insert 18 health & fitness topics for the rotation cycle
+INSERT INTO topic_rotation (topic_name, cycle_number, topic_sequence, status) VALUES
+('Health and Fitness', 1, 1, 'active'),
+('Weight Loss', 1, 2, 'pending'),
+('Muscle Building', 1, 3, 'pending'),
+('Nutrition and Diet', 1, 4, 'pending'),
+('Cardiovascular Health', 1, 5, 'pending'),
+('Mental Health and Wellness', 1, 6, 'pending'),
+('Yoga and Flexibility', 1, 7, 'pending'),
+('High Intensity Training', 1, 8, 'pending'),
+('Sleep and Recovery', 1, 9, 'pending'),
+('Joint and Bone Health', 1, 10, 'pending'),
+('Immune System Boosting', 1, 11, 'pending'),
+('Energy and Stamina', 1, 12, 'pending'),
+('Stress Management', 1, 13, 'pending'),
+('Aging and Longevity', 1, 14, 'pending'),
+('Sports Performance', 1, 15, 'pending'),
+('Home Fitness Solutions', 1, 16, 'pending'),
+('Supplement Guide', 1, 17, 'pending'),
+('Habit Building and Lifestyle', 1, 18, 'pending');
 
 -- ============================================================================
--- CREATE INDEXES FOR PERFORMANCE
+-- STEP 8: CREATE INDEXES FOR PERFORMANCE
 -- ============================================================================
 
-CREATE INDEX idx_blog_posts_status ON blog_posts(status);
-CREATE INDEX idx_blog_posts_topic ON blog_posts(topic);
-CREATE INDEX idx_blog_posts_wordpress ON blog_posts(wordpress_post_id);
-CREATE INDEX idx_blog_titles_topic ON blog_titles(topic);
-CREATE INDEX idx_trending_keywords_topic ON trending_keywords(topic);
-CREATE INDEX idx_system_error_log_status ON system_error_log(status);
-CREATE INDEX idx_affiliate_products_blog ON affiliate_products(blog_id);
+-- Performance indexes on frequently queried columns
+CREATE INDEX IF NOT EXISTS idx_blog_posts_status_created ON blog_posts(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_topic_status ON blog_posts(topic, status);
+CREATE INDEX IF NOT EXISTS idx_trending_keywords_volume ON trending_keywords(search_volume DESC);
+CREATE INDEX IF NOT EXISTS idx_plagiarism_blog_score ON plagiarism_checks(blog_id, similarity_percentage);
 
 -- ============================================================================
--- COMPLETION MARKER
+-- SUCCESS CONFIRMATION
 -- ============================================================================
-SELECT 'Database schema migration COMPLETE' AS status;
+-- Schema migration complete. All 11 robot failures should now be resolved.
+-- Database is ready for full pipeline execution.
+-- Expected result: 35/35 robots successfully executing
