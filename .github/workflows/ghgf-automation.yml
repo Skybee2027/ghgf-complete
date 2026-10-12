@@ -40,20 +40,6 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD || 'root' }}
-          MYSQL_DATABASE: ${{ secrets.DB_NAME || 'ghgf_blogging' }}
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
-        ports:
-          - 3306:3306
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -92,32 +78,32 @@ jobs:
 
     - name: Wait for MySQL and initialize database
       run: |
-        echo "Waiting for MySQL to be ready..."
+        echo "Connecting to external database at $DB_HOST..."
         for i in {1..30}; do
-          if mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" 2>/dev/null; then
-            echo "MySQL is ready!"
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" 2>/dev/null; then
+            echo "✅ Database connection successful!"
             break
           fi
-          echo "Attempt $i/30 - MySQL not ready yet..."
+          echo "Attempt $i/30 - Database not ready yet..."
           sleep 1
         done
 
         echo "Creating database and loading schema..."
-        mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
+        mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
         if [ -f database/R0_Base_Schema.sql ]; then
-          mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Base_Schema.sql
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Base_Schema.sql
           echo "✓ Loaded R0_Base_Schema.sql"
         fi
         if [ -f database/R0_Migration_AddColumns.sql ]; then
-          mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_AddColumns.sql
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_AddColumns.sql
           echo "✓ Loaded R0_Migration_AddColumns.sql"
         fi
         if [ -f database/R37_Database_Schema.sql ]; then
-          mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R37_Database_Schema.sql
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R37_Database_Schema.sql
           echo "✓ Loaded R37_Database_Schema.sql"
         fi
         if [ -f database/R14b_Database_Schema.sql ]; then
-          mysql -h localhost -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R14b_Database_Schema.sql
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R14b_Database_Schema.sql
           echo "✓ Loaded R14b_Database_Schema.sql"
         fi
       continue-on-error: true
