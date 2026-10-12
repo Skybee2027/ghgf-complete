@@ -157,7 +157,54 @@ jobs:
     - name: Run GHGF Pipeline
       run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
       working-directory: ./
-    
+
+    - name: Verify blog post was created
+      run: |
+        python3 << 'PYEOF'
+        import os
+        import mysql.connector
+
+        db_config = {
+            'host': os.getenv('DB_HOST'),
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD'),
+            'database': os.getenv('DB_NAME')
+        }
+
+        try:
+            conn = mysql.connector.connect(**db_config)
+            cursor = conn.cursor(dictionary=True)
+
+            # Check for recent blog posts
+            cursor.execute("""
+                SELECT id, title, status, wordpress_post_id, created_at
+                FROM blog_posts
+                ORDER BY created_at DESC
+                LIMIT 3
+            """)
+            posts = cursor.fetchall()
+
+            print("\n" + "="*70)
+            print("RECENT BLOG POSTS IN DATABASE")
+            print("="*70)
+
+            if posts:
+                for post in posts:
+                    print(f"ID: {post['id']}")
+                    print(f"  Title: {post['title']}")
+                    print(f"  Status: {post['status']}")
+                    print(f"  WordPress ID: {post['wordpress_post_id']}")
+                    print(f"  Created: {post['created_at']}")
+                    print()
+            else:
+                print("❌ NO BLOG POSTS FOUND IN DATABASE!")
+
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"❌ Error checking database: {str(e)}")
+        PYEOF
+
     - name: Upload error logs
       if: always()
       uses: actions/upload-artifact@v4
