@@ -16,9 +16,6 @@ jobs:
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       DB_NAME: ${{ secrets.DB_NAME }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
-      WORDPRESS_USERNAME: ${{ secrets.WORDPRESS_USERNAME }}
-      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
     
     steps:
       - name: Checkout Repository
@@ -29,7 +26,7 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install MySQL Client
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y mysql-client
@@ -37,7 +34,8 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install groq mysql-connector-python requests
+        continue-on-error: true
       
       - name: Verify Environment Variables
         run: |
@@ -45,62 +43,97 @@ jobs:
           echo "ENVIRONMENT VARIABLE VERIFICATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
+          ERRORS=0
+          
           if [ -z "$DB_HOST" ]; then
             echo "❌ ERROR: DB_HOST not set"
-            exit 1
+            ERRORS=$((ERRORS + 1))
           else
             echo "✓ DB_HOST is set: $DB_HOST"
           fi
           
           if [ -z "$DB_USER" ]; then
             echo "❌ ERROR: DB_USER not set"
-            exit 1
+            ERRORS=$((ERRORS + 1))
           else
             echo "✓ DB_USER is set: $DB_USER"
           fi
           
           if [ -z "$DB_PASSWORD" ]; then
             echo "❌ ERROR: DB_PASSWORD not set"
-            exit 1
+            ERRORS=$((ERRORS + 1))
           else
-            echo "✓ DB_PASSWORD is set (length: ${#DB_PASSWORD})"
+            echo "✓ DB_PASSWORD is set"
           fi
           
           if [ -z "$DB_NAME" ]; then
             echo "❌ ERROR: DB_NAME not set"
-            exit 1
+            ERRORS=$((ERRORS + 1))
           else
             echo "✓ DB_NAME is set: $DB_NAME"
           fi
           
           if [ -z "$GROQ_API_KEY" ]; then
             echo "❌ ERROR: GROQ_API_KEY not set"
-            exit 1
+            ERRORS=$((ERRORS + 1))
           else
-            echo "✓ GROQ_API_KEY is set (length: ${#GROQ_API_KEY})"
+            echo "✓ GROQ_API_KEY is set"
           fi
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "All required environment variables are configured ✓"
+          
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ $ERRORS environment variable(s) missing!"
+            echo ""
+            echo "Please add these GitHub Actions Secrets:"
+            echo "  Settings → Secrets and variables → Actions → New repository secret"
+            echo ""
+            echo "  - DB_HOST"
+            echo "  - DB_USER"
+            echo "  - DB_PASSWORD"
+            echo "  - DB_NAME"
+            echo "  - GROQ_API_KEY"
+            exit 1
+          else
+            echo "✅ All required environment variables configured!"
+          fi
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       
       - name: Test Database Connection
         run: |
-          echo "Testing database connection..."
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SELECT 1;" && echo "✓ Database connection successful" || echo "❌ Database connection failed"
+          echo "Testing database connection to $DB_HOST..."
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SELECT 1 as connection_test;" 2>&1 | head -20
+          
+          if [ $? -eq 0 ]; then
+            echo "✓ Database connection successful"
+          else
+            echo "❌ Database connection failed - check credentials"
+            exit 1
+          fi
       
       - name: Fix Database Schema
         run: |
+          echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "EXECUTING DATABASE SCHEMA MIGRATION"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
+          if [ ! -f "fix_database_schema.sql" ]; then
+            echo "❌ ERROR: fix_database_schema.sql not found in repository root"
+            exit 1
+          fi
+          
           mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < fix_database_schema.sql
           
-          if [ $? -eq 0 ]; then
+          SCHEMA_RESULT=$?
+          
+          if [ $SCHEMA_RESULT -eq 0 ]; then
+            echo ""
             echo "✓ Database schema migration completed successfully"
           else
-            echo "❌ Database schema migration failed"
+            echo ""
+            echo "❌ Database schema migration failed (exit code: $SCHEMA_RESULT)"
+            echo "Check the error messages above"
             exit 1
           fi
           
@@ -109,43 +142,47 @@ jobs:
       
       - name: Run Full 35-Robot Pipeline
         run: |
-          echo "Starting GHGF 35-Robot Full Pipeline..."
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "STARTING GHGF 35-ROBOT AUTONOMOUS PIPELINE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          
+          if [ ! -f "run_full_pipeline.py" ]; then
+            echo "❌ ERROR: run_full_pipeline.py not found in repository root"
+            exit 1
+          fi
+          
           python run_full_pipeline.py
-        continue-on-error: true
+          
+          PIPELINE_RESULT=$?
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "PIPELINE EXECUTION COMPLETED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          exit $PIPELINE_RESULT
+        continue-on-error: false
       
-      - name: Generate Execution Report
-        if: always()
+      - name: Pipeline Success Notification
+        if: success()
         run: |
-          echo "Pipeline execution completed"
-          echo "Check GitHub Actions logs above for detailed results"
+          echo ""
+          echo "✅ GHGF Pipeline completed successfully!"
+          echo "New blog post is being published..."
+          echo "Check your WordPress dashboard in a few minutes"
       
-      - name: Slack Notification (On Failure - Optional)
+      - name: Pipeline Failure Notification
         if: failure()
-        uses: slackapi/slack-github-action@v1
-        with:
-          payload: |
-            {
-              "text": "❌ GHGF Pipeline Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "❌ *GHGF Automation Pipeline Failed*\n\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref }}\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
-                  }
-                }
-              ]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-
-  notify-on-success:
-    needs: ghgf-pipeline
-    runs-on: ubuntu-latest
-    if: success()
-    steps:
-      - name: Success Notification
         run: |
-          echo "✓ GHGF Pipeline completed successfully"
-          echo "New blog post should appear on WordPress within 5-10 minutes"
+          echo ""
+          echo "❌ GHGF Pipeline encountered errors"
+          echo "Review the log output above for details"
+          echo ""
+          echo "Common issues:"
+          echo "  - Database credentials incorrect (check GitHub Secrets)"
+          echo "  - GROQ_API_KEY missing or invalid"
+          echo "  - Database schema migration failed"
+          echo "  - Python script errors (check log output)"
