@@ -3,7 +3,6 @@ SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_name VARCHAR(255) NOT NULL UNIQUE,
-    status VARCHAR(50) DEFAULT 'active',
     cycle_count INT DEFAULT 0,
     sequence_number INT NOT NULL,
     last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -11,27 +10,31 @@ CREATE TABLE IF NOT EXISTS topic_rotation (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE topic_rotation ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active';
+
 CREATE TABLE IF NOT EXISTS blog_titles (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_id INT NOT NULL,
-    topic VARCHAR(255),
     title VARCHAR(500) NOT NULL,
     generated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     used_status ENUM('pending', 'used', 'rejected') DEFAULT 'pending'
 );
 
+ALTER TABLE blog_titles ADD COLUMN IF NOT EXISTS topic VARCHAR(255);
+
 CREATE TABLE IF NOT EXISTS blog_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title_id INT,
     topic_id INT,
-    title VARCHAR(500),
-    topic VARCHAR(255),
     content LONGTEXT,
     status ENUM('draft', 'pending', 'published', 'failed') DEFAULT 'draft',
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     published_date TIMESTAMP NULL,
     qa_check_passed BOOLEAN DEFAULT FALSE
 );
+
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS title VARCHAR(500);
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS topic VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS trending_keywords (
     id INT PRIMARY KEY AUTO_INCREMENT,
