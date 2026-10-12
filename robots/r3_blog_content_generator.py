@@ -34,6 +34,8 @@ class BlogContentGenerator:
         """Initialize content generator"""
         self.groq_key = os.getenv("GROQ_API_KEY")
         self.google_key = os.getenv("GOOGLE_API_KEY")
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
 
         if not self.groq_key:
             logger.error("GROQ_API_KEY not set")
@@ -150,13 +152,22 @@ Keywords to naturally include: {keywords_str}
 
 Return ONLY the HTML content, no explanations."""
 
-            logger.info("Calling Groq API to generate content...")
-            response = client.chat.completions.create(
-                model="mixtral-8x7b-32768",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
-                temperature=0.7
-            )
+            # Use GROQ_MODEL env var if set, otherwise omit model parameter
+            if self.groq_model:
+                logger.info(f"Calling Groq API with configured model: {self.groq_model}")
+                response = client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2000,
+                    temperature=0.7
+                )
+            else:
+                logger.info("Calling Groq API with default model")
+                response = client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2000,
+                    temperature=0.7
+                )
 
             if response.choices and response.choices[0].message.content:
                 content = response.choices[0].message.content.strip()
@@ -177,7 +188,6 @@ Return ONLY the HTML content, no explanations."""
             import google.generativeai as genai
             genai.configure(api_key=self.google_key)
 
-            model = genai.GenerativeModel('gemini-1.5-flash')
             keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
 
             prompt = f"""Write a comprehensive health blog post: "{title}"
@@ -188,7 +198,14 @@ Include: introduction, problem, solution, benefits, buying guide, conclusion
 Format in HTML with <h2>, <h3>, <p>, <ul>, <li> tags
 Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
 
-            logger.info("Calling Google Gemini API for content...")
+            # Use GEMINI_MODEL env var if set, otherwise use default
+            if self.gemini_model:
+                logger.info(f"Calling Google Gemini API with configured model: {self.gemini_model}")
+                model = genai.GenerativeModel(self.gemini_model)
+            else:
+                logger.info("Calling Google Gemini API with default model")
+                model = genai.GenerativeModel()
+
             response = model.generate_content(prompt)
 
             if response.text:

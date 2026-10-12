@@ -38,6 +38,7 @@ class PlagiarismChecker:
         }
         self.plagiarism_threshold = 0.05  # 5%
         self.groq_key = os.getenv("GROQ_API_KEY")
+        self.groq_model = os.getenv("GROQ_MODEL")
         self.max_retries = 3
         self.current_attempt = 0
 
@@ -176,12 +177,22 @@ Guidelines:
 
 Return ONLY the rewritten content."""
 
-            response = client.chat.completions.create(
-                model="mixtral-8x7b-32768",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
-                temperature=0.9  # Higher temperature for more variation
-            )
+            # Use GROQ_MODEL env var if set, otherwise omit model parameter
+            if self.groq_model:
+                logger.info(f"Regenerating with configured model: {self.groq_model}")
+                response = client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2000,
+                    temperature=0.9  # Higher temperature for more variation
+                )
+            else:
+                logger.info("Regenerating with default Groq model")
+                response = client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2000,
+                    temperature=0.9  # Higher temperature for more variation
+                )
 
             if response.choices and response.choices[0].message.content:
                 return response.choices[0].message.content.strip()
