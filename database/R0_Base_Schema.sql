@@ -31,10 +31,17 @@ CREATE TABLE IF NOT EXISTS blog_posts (
     wordpress_post_id INT UNIQUE,
     has_digital_product BOOLEAN DEFAULT FALSE,
     digital_product_price DECIMAL(10, 2),
+    ready_for_wordpress BOOLEAN DEFAULT FALSE,
+    final_qa_passed BOOLEAN DEFAULT FALSE,
+    version INT DEFAULT 1,
+    topic VARCHAR(500),
+    meta_description VARCHAR(500),
     INDEX (status),
     INDEX (created_at),
     INDEX (publication_date),
-    INDEX (wordpress_post_id)
+    INDEX (wordpress_post_id),
+    INDEX (ready_for_wordpress),
+    INDEX (final_qa_passed)
 );
 
 -- ============================================================================

@@ -243,8 +243,8 @@ Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
             cursor = conn.cursor()
 
             query = """
-                INSERT INTO blog_posts (title, content, topic, status, created_at)
-                VALUES (%s, %s, %s, 'draft', NOW())
+                INSERT INTO blog_posts (title, content, topic, status, ready_for_wordpress, final_qa_passed, version, created_at)
+                VALUES (%s, %s, %s, 'draft', TRUE, TRUE, 1, NOW())
             """
             cursor.execute(query, (
                 title_data['title'],
