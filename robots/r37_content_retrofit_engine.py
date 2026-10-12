@@ -36,6 +36,10 @@ class ContentRetrofitEngine:
         self.cohere_api_key = os.getenv('COHERE_API_KEY', '')
         self.google_api_key = os.getenv('GOOGLE_API_KEY', '')
 
+        # Model configuration - from environment variables only
+        self.groq_model = os.getenv('GROQ_MODEL', 'mixtral-8x7b-32768')
+        self.openai_model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+
         # Affiliate APIs
         self.cj_api_key = os.getenv('CJ_API_KEY', '')
         self.shareasale_token = os.getenv('SHAREASALE_API_TOKEN', '')
@@ -83,7 +87,7 @@ class ContentRetrofitEngine:
                 if response.status_code == 200:
                     data = response.json()
                     if 'data' in data and len(data['data']) > 0:
-                        model_id = data['data'][0].get('id', 'mixtral-8x7b-32768')
+                        model_id = data['data'][0].get('id', self.groq_model)
                         return ('groq', model_id)
             except:
                 pass
@@ -94,7 +98,7 @@ class ContentRetrofitEngine:
 
         # Try OpenAI
         if self.openai_api_key:
-            return ('openai', 'gpt-3.5-turbo')
+            return ('openai', self.openai_model)
 
         return (None, None)
 
