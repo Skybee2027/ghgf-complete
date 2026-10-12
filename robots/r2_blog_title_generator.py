@@ -48,16 +48,19 @@ class BlogTitleGenerator:
         self.cohere_key = os.getenv("COHERE_API_KEY")
         self.openai_key = os.getenv("OPENAI_API_KEY")
 
-        # Model names - fully configurable, NO hardcoded defaults
-        # User can override with environment variables like:
-        # GROQ_MODEL=llama-3.3-70b-versatile
-        # GEMINI_MODEL=gemini-1.5-flash
-        # COHERE_MODEL=command-r
-        # OPENAI_MODEL=gpt-3.5-turbo
-        self.groq_model = os.getenv("GROQ_MODEL")
-        self.gemini_model = os.getenv("GEMINI_MODEL")
-        self.cohere_model = os.getenv("COHERE_MODEL")
-        self.openai_model = os.getenv("OPENAI_MODEL")
+        # Model names - fully configurable with intelligent defaults
+        # User can override with environment variables, otherwise sensible defaults are used
+        # Defaults chosen for broad availability across free/trial accounts:
+        self.groq_model = os.getenv("GROQ_MODEL", "mixtral-8x7b-32768")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-pro")
+        self.cohere_model = os.getenv("COHERE_MODEL", "command-r")
+        self.openai_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+
+        logger.debug(f"Model configuration:")
+        logger.debug(f"  GROQ_MODEL={self.groq_model} (default: mixtral-8x7b-32768)")
+        logger.debug(f"  GEMINI_MODEL={self.gemini_model} (default: gemini-pro)")
+        logger.debug(f"  COHERE_MODEL={self.cohere_model} (default: command-r)")
+        logger.debug(f"  OPENAI_MODEL={self.openai_model} (default: gpt-3.5-turbo)")
 
         if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
             logger.error("CRITICAL: No API keys found!")
