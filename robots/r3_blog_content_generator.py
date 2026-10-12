@@ -407,7 +407,7 @@ Return ONLY the HTML content, no explanations."""
 
             query = """
                 INSERT INTO blog_posts (title_id, title, content, topic_id, status, ready_for_wordpress, final_qa_passed, version, created_at)
-                VALUES (%s, %s, %s, %s, 'draft', TRUE, TRUE, 1, NOW())
+                VALUES (%s, %s, %s, %s, 'draft', FALSE, FALSE, 1, NOW())
             """
             cursor.execute(query, (
                 title_data['id'],
