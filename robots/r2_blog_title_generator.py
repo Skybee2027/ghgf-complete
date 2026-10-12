@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R2: Blog Title Generator
+R2: Blog Title Generator (Enhanced with Comprehensive Debugging)
 Purpose: Generate 5 catchy, SEO-optimized blog titles using trending keywords and 18-topic rotation
 Input: Trending keywords (from R13), current topic from rotation schedule
 Output: 5 title variations (best selected for next phase)
@@ -11,14 +11,15 @@ Dependencies: Requires R13 to populate trending_keywords table + topic_rotation 
 import os
 import sys
 import json
+import traceback
 import mysql.connector
 from datetime import datetime
 from groq import Groq
 import logging
 
-# Setup logging
+# Setup logging with more verbosity
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -33,10 +34,23 @@ BLUE = '\033[94m'
 class BlogTitleGenerator:
     def __init__(self):
         """Initialize title generator with database and API connections"""
+        logger.info("=" * 70)
+        logger.info("Initializing R2: Blog Title Generator")
+        logger.info("=" * 70)
+
+        # Check Groq API Key
         self.groq_key = os.getenv("GROQ_API_KEY")
         if not self.groq_key:
-            logger.error("GROQ_API_KEY not set")
+            logger.error("CRITICAL: GROQ_API_KEY environment variable not set!")
+            logger.error("Expected environment variable: GROQ_API_KEY")
+            logger.error("Current environment variables:")
+            for key in os.environ:
+                if 'GROQ' in key or 'API' in key or 'KEY' in key:
+                    logger.error(f"  - {key}: [SET]")
             sys.exit(1)
+
+        logger.info("✓ GROQ_API_KEY is set")
+        logger.debug(f"  Groq API Key (first 10 chars): {self.groq_key[:10]}...")
 
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -44,6 +58,8 @@ class BlogTitleGenerator:
             'password': os.getenv('DB_PASSWORD', ''),
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
+
+        logger.info(f"Database config: host={self.db_config['host']}, db={self.db_config['database']}, user={self.db_config['user']}")
 
         self.titles_generated = 0
         self.current_topic = None
@@ -58,41 +74,77 @@ class BlogTitleGenerator:
     def connect_db(self):
         """Connect to database"""
         try:
+            logger.info("Attempting database connection...")
             conn = mysql.connector.connect(**self.db_config)
-            logger.info("Database connected successfully")
+            logger.info("✓ Database connected successfully")
+
+            # Verify database has required tables
+            cursor = conn.cursor()
+            cursor.execute("SHOW TABLES LIKE 'topic_rotation'")
+            if not cursor.fetchone():
+                logger.error("CRITICAL: topic_rotation table does not exist!")
+            else:
+                logger.info("✓ topic_rotation table exists")
+
+            cursor.execute("SHOW TABLES LIKE 'trending_keywords'")
+            if not cursor.fetchone():
+                logger.error("CRITICAL: trending_keywords table does not exist!")
+            else:
+                logger.info("✓ trending_keywords table exists")
+
+            cursor.execute("SHOW TABLES LIKE 'blog_titles'")
+            if not cursor.fetchone():
+                logger.error("CRITICAL: blog_titles table does not exist!")
+            else:
+                logger.info("✓ blog_titles table exists")
+
+            cursor.close()
             return conn
+        except mysql.connector.Error as e:
+            logger.error(f"Database connection failed - MySQL Error {e.errno}: {e.msg}")
+            logger.error(f"Full error: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return None
         except Exception as e:
             logger.error(f"Database connection failed: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     def get_current_topic(self, conn):
         """Get current active topic from 18-topic rotation"""
         try:
+            logger.info("Fetching current active topic...")
             cursor = conn.cursor(dictionary=True)
             query = "SELECT * FROM topic_rotation WHERE status = 'active' LIMIT 1"
+            logger.debug(f"Query: {query}")
             cursor.execute(query)
             result = cursor.fetchone()
             cursor.close()
 
             if result:
                 self.current_topic = result
-                logger.info(f"Current topic: {result['topic_name']} (Cycle: {result['cycle_number']}, Seq: {result['topic_sequence']})")
+                logger.info(f"✓ Current topic: {result['topic_name']}")
+                logger.debug(f"  Topic details: {json.dumps(result, indent=2, default=str)}")
+                logger.info(f"  Cycle: {result.get('cycle_number', 'N/A')}, Sequence: {result.get('topic_sequence', 'N/A')}")
                 return result
             else:
-                logger.warning("No active topic found. Setting to first topic...")
+                logger.warning("No active topic found. Attempting to set first topic to active...")
                 query = "UPDATE topic_rotation SET status = 'active', start_date = CURDATE() WHERE cycle_number = 1 AND topic_sequence = 1"
                 cursor = conn.cursor()
                 cursor.execute(query)
                 conn.commit()
+                logger.info(f"Updated {cursor.rowcount} rows to active")
                 cursor.close()
                 return self.get_current_topic(conn)
         except Exception as e:
             logger.error(f"Error getting current topic: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     def get_trending_keywords(self, conn, topic):
         """Get trending keywords for current topic from R13's cache"""
         try:
+            logger.info(f"Fetching trending keywords for topic: {topic['topic_name']}...")
             cursor = conn.cursor(dictionary=True)
             # Get top 10 trending keywords for this topic
             query = """
@@ -102,6 +154,8 @@ class BlogTitleGenerator:
                 ORDER BY search_volume DESC
                 LIMIT 10
             """
+            logger.debug(f"Query: {query}")
+            logger.debug(f"Parameter: {topic['topic_name']}")
             cursor.execute(query, (topic['topic_name'],))
             results = cursor.fetchall()
             cursor.close()
@@ -109,23 +163,32 @@ class BlogTitleGenerator:
             if results:
                 self.trending_keywords = results
                 keywords_str = ", ".join([k['keyword'] for k in results])
-                logger.info(f"Retrieved {len(results)} trending keywords: {keywords_str}")
+                logger.info(f"✓ Retrieved {len(results)} trending keywords")
+                logger.debug(f"  Keywords: {keywords_str}")
                 return results
             else:
                 logger.warning(f"No trending keywords found for topic: {topic['topic_name']}")
-                # Fallback: use topic name as keyword
                 logger.info(f"Using topic name as fallback keyword")
-                return [{'keyword': topic['topic_name'], 'search_volume': 0, 'competition_level': 'medium'}]
+                return [{'keyword': topic['topic_name'], 'search_volume': 0, 'competition_level': 'Medium'}]
         except Exception as e:
             logger.error(f"Error getting trending keywords: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
 
     def generate_titles_with_groq(self, topic, keywords):
         """Generate 5 title variations using Groq"""
         try:
+            logger.info("=" * 70)
+            logger.info("GROQ API INITIALIZATION & CALL")
+            logger.info("=" * 70)
+
+            logger.info("Step 1: Initializing Groq client...")
+            logger.debug(f"  API Key length: {len(self.groq_key)} characters")
             client = Groq(api_key=self.groq_key)
+            logger.info("✓ Groq client initialized successfully")
 
             keywords_list = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
+            logger.debug(f"Keywords for prompt: {keywords_list}")
 
             prompt = f"""Generate 5 catchy, engaging, SEO-optimized blog post titles about the topic: "{topic['topic_name']}"
 
@@ -144,27 +207,74 @@ Requirements:
 Topic context: {topic['topic_name']}
 Target audience: Adults of all ages and genders interested in health & fitness"""
 
-            logger.info("Calling Groq API to generate titles...")
-            response = client.chat.completions.create(
-                model="mixtral-8x7b-32768",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.8
-            )
+            logger.info("Step 2: Building API request...")
+            logger.debug(f"  Model: mixtral-8x7b-32768")
+            logger.debug(f"  Max tokens: 300")
+            logger.debug(f"  Temperature: 0.8")
+            logger.debug(f"  Prompt length: {len(prompt)} characters")
 
-            if response.choices and response.choices[0].message.content:
-                titles_raw = response.choices[0].message.content.strip()
+            logger.info("Step 3: Calling Groq API...")
+            try:
+                response = client.chat.completions.create(
+                    model="mixtral-8x7b-32768",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                    temperature=0.8
+                )
+                logger.info("✓ Groq API call succeeded")
+            except Exception as api_error:
+                logger.error(f"GROQ API CALL FAILED:")
+                logger.error(f"  Error Type: {type(api_error).__name__}")
+                logger.error(f"  Error Message: {str(api_error)}")
+                logger.error(f"  Full traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    logger.error(f"    {line}")
+                return None
+
+            logger.info("Step 4: Processing response...")
+            logger.debug(f"  Response type: {type(response)}")
+            logger.debug(f"  Response has choices: {hasattr(response, 'choices')}")
+
+            if not response.choices:
+                logger.error("Groq returned empty response (no choices)")
+                logger.debug(f"Full response: {response}")
+                return None
+
+            logger.debug(f"  Number of choices: {len(response.choices)}")
+            first_choice = response.choices[0]
+            logger.debug(f"  First choice has message: {hasattr(first_choice, 'message')}")
+
+            if not first_choice.message:
+                logger.error("Groq first choice has no message")
+                return None
+
+            logger.debug(f"  Message content length: {len(first_choice.message.content)} characters")
+
+            if first_choice.message.content:
+                titles_raw = first_choice.message.content.strip()
+                logger.info(f"✓ Received response content: {len(titles_raw)} characters")
+                logger.debug(f"  Raw content: {titles_raw}")
+
                 titles = [t.strip() for t in titles_raw.split('|')]
                 titles = [t for t in titles if t]  # Remove empty
 
+                logger.info(f"✓ Parsed {len(titles)} titles from response")
+                for i, t in enumerate(titles[:5], 1):
+                    logger.debug(f"  Title {i}: {t}")
+
                 self.titles_generated = len(titles)
-                logger.info(f"Generated {self.titles_generated} titles")
                 return titles[:5]  # Return max 5
             else:
-                logger.error("Groq returned empty response")
+                logger.error("Groq returned empty message content")
+                logger.debug(f"Full response: {response}")
                 return None
         except Exception as e:
-            logger.error(f"Groq API error: {str(e)}")
+            logger.error(f"UNEXPECTED ERROR IN generate_titles_with_groq:")
+            logger.error(f"  Error Type: {type(e).__name__}")
+            logger.error(f"  Error Message: {str(e)}")
+            logger.error(f"  Full traceback:")
+            for line in traceback.format_exc().split('\n'):
+                logger.error(f"    {line}")
             return None
 
     def score_titles(self, titles):
