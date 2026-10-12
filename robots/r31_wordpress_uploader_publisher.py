@@ -52,6 +52,11 @@ class WordPressUploaderPublisher:
         self.posts_published = 0
         self.posts_failed = 0
 
+        # Log credentials for debugging
+        logger.info(f"WordPress Config: URL={self.wp_url}, User={self.wp_user}, Password={'SET' if self.wp_password else 'EMPTY'}")
+        if not self.wp_password:
+            logger.error("CRITICAL: WORDPRESS_PASSWORD is empty! Posts cannot be published.")
+
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
 
@@ -82,6 +87,7 @@ class WordPressUploaderPublisher:
             cursor.execute(query)
             results = cursor.fetchall()
             cursor.close()
+            logger.info(f"Found {len(results) if results else 0} posts ready to publish (status=draft, ready_for_wordpress=TRUE, final_qa_passed=TRUE)")
             return results
         except Exception as e:
             logger.error(f"Error getting posts: {str(e)}")
