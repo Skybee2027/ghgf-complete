@@ -19,9 +19,12 @@ env:
   COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-  # Note: Model names are configured via environment variables
-  # Set GROQ_MODEL, OPENAI_MODEL, GEMINI_MODEL, COHERE_MODEL as needed
-  # Robots dynamically use whatever models are configured (no hardcoded defaults)
+  # LLM Model Names (required for API calls)
+  # Can be overridden via GitHub Secrets if needed
+  GROQ_MODEL: ${{ secrets.GROQ_MODEL || 'llama-3.1-70b-versatile' }}
+  GEMINI_MODEL: ${{ secrets.GEMINI_MODEL || 'gemini-1.5-pro' }}
+  COHERE_MODEL: ${{ secrets.COHERE_MODEL || 'command-r' }}
+  OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4-turbo' }}
 
   # WordPress Configuration (for publishing)
   WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
@@ -59,6 +62,18 @@ jobs:
         [ -n "$GEMINI_API_KEY" ] && echo "✅ GEMINI_API_KEY is set"
         [ -n "$COHERE_API_KEY" ] && echo "✅ COHERE_API_KEY is set"
         [ -n "$OPENAI_API_KEY" ] && echo "✅ OPENAI_API_KEY is set"
+
+        echo ""
+        echo "Checking LLM Model Configuration..."
+        if [ -z "$GROQ_MODEL" ]; then echo "ERROR: GROQ_MODEL not set"; exit 1; fi
+        if [ -z "$GEMINI_MODEL" ]; then echo "ERROR: GEMINI_MODEL not set"; exit 1; fi
+        if [ -z "$COHERE_MODEL" ]; then echo "ERROR: COHERE_MODEL not set"; exit 1; fi
+        if [ -z "$OPENAI_MODEL" ]; then echo "ERROR: OPENAI_MODEL not set"; exit 1; fi
+
+        echo "✅ GROQ_MODEL is set to: $GROQ_MODEL"
+        echo "✅ GEMINI_MODEL is set to: $GEMINI_MODEL"
+        echo "✅ COHERE_MODEL is set to: $COHERE_MODEL"
+        echo "✅ OPENAI_MODEL is set to: $OPENAI_MODEL"
 
         echo ""
         echo "Checking WordPress Publishing Configuration..."
