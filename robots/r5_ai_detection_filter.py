@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-R5: AI Detection Filter
+R5: AI Detection Filter (Multi-Provider Fallback)
 Purpose: Detect AI-written content <70%; regenerate if flagged
 Input: Blog post content (from R4 plagiarism check)
 Output: Approved content or regenerated with human-like characteristics
 Frequency: Every 6 hours (after R4 completes)
 Dependencies: R4 (provides content)
 Threshold: <70% AI = PASS, >70% = REGENERATE with human-like characteristics
+
+Provider Chain: Groq → Gemini → Cohere → OpenAI
 """
 
 import os
@@ -15,6 +17,7 @@ import mysql.connector
 from datetime import datetime
 import re
 import logging
+import traceback
 from collections import Counter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,7 +32,7 @@ BLUE = '\033[94m'
 
 class AIDetectionFilter:
     def __init__(self):
-        """Initialize AI detection filter"""
+        """Initialize AI detection filter with multi-provider API support"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'user': os.getenv('DB_USER', 'root'),
@@ -37,10 +40,26 @@ class AIDetectionFilter:
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
         self.ai_threshold = 0.70  # 70%
+
+        # Check available API keys - all optional since we have fallback chain
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.groq_model = os.getenv("GROQ_MODEL")  # Flexible: accepts any model from environment
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.cohere_key = os.getenv("COHERE_API_KEY")
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+
+        # Model names - FROM ENVIRONMENT VARIABLES
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
+
+        # Check that at least ONE API key is available
+        if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
+            logger.warning("No LLM API keys found - will only do AI detection without regeneration")
+
         self.max_retries = 3
         self.current_attempt = 0
+        self.provider_used = None
 
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
@@ -175,28 +194,11 @@ class AIDetectionFilter:
         logger.info(f"Final AI Detection Score: {ai_score:.2%}")
         return ai_score
 
-    def regenerate_with_human_characteristics(self, conn, blog_id, original_content):
-        """Regenerate content with human-like characteristics"""
-        try:
-            from groq import Groq
-
-            if not self.groq_key:
-                logger.error("GROQ_API_KEY not set")
-                return None
-
-            client = Groq(api_key=self.groq_key)
-
-            cursor = conn.cursor(dictionary=True)
-            query = "SELECT title, topic FROM blog_posts WHERE id = %s"
-            cursor.execute(query, (blog_id,))
-            blog = cursor.fetchone()
-            cursor.close()
-
-            logger.info(f"Regenerating with human-like characteristics (Attempt {self.current_attempt + 1})")
-
-            prompt = f"""Rewrite this blog post to sound MORE human and natural.
-Title: {blog['title']}
-Topic: {blog['topic']}
+    def get_human_prompt(self, blog_title, blog_topic):
+        """Generate the shared human-like regeneration prompt for all providers"""
+        prompt = f"""Rewrite this blog post to sound MORE human and natural.
+Title: {blog_title}
+Topic: {blog_topic}
 
 Make it sound HUMAN by:
 1. Use contractions: can't, won't, don't, I'm, you're, etc (10-15% of text)
@@ -211,9 +213,21 @@ Make it sound HUMAN by:
 10. Include [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders
 
 Make it feel like written by a real person, not an AI."""
+        return prompt
 
-            # Groq REQUIRES model parameter - use env var or default
-            logger.info(f"Regenerating with model: {self.groq_model}")
+    def regenerate_with_groq_human(self, blog_title, blog_topic):
+        """Regenerate with human characteristics using Groq"""
+        if not self.groq_key:
+            logger.debug("Groq API key not available, skipping Groq provider")
+            return None
+
+        try:
+            from groq import Groq
+
+            logger.info("Attempting Groq provider...")
+            client = Groq(api_key=self.groq_key)
+            prompt = self.get_human_prompt(blog_title, blog_topic)
+
             response = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[{"role": "user", "content": prompt}],
@@ -222,10 +236,140 @@ Make it feel like written by a real person, not an AI."""
             )
 
             if response.choices and response.choices[0].message.content:
+                self.provider_used = "Groq"
+                logger.info(f"✓ Groq succeeded")
                 return response.choices[0].message.content.strip()
             return None
+        except ImportError:
+            logger.warning("Groq library not installed")
+            return None
         except Exception as e:
-            logger.error(f"Regeneration error: {str(e)}")
+            logger.error(f"Groq failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_gemini_human(self, blog_title, blog_topic):
+        """Regenerate with human characteristics using Gemini"""
+        if not self.gemini_key:
+            logger.debug("Gemini API key not available, skipping Gemini provider")
+            return None
+
+        try:
+            import google.generativeai as genai
+
+            logger.info("Attempting Gemini provider...")
+            genai.configure(api_key=self.gemini_key)
+            prompt = self.get_human_prompt(blog_title, blog_topic)
+
+            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
+            response = model.generate_content(prompt)
+
+            if response.text:
+                self.provider_used = "Gemini"
+                logger.info(f"✓ Gemini succeeded")
+                return response.text
+            return None
+        except ImportError:
+            logger.warning("Google Generative AI library not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Gemini failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_cohere_human(self, blog_title, blog_topic):
+        """Regenerate with human characteristics using Cohere"""
+        if not self.cohere_key:
+            logger.debug("Cohere API key not available, skipping Cohere provider")
+            return None
+
+        try:
+            import cohere
+
+            logger.info("Attempting Cohere provider...")
+            client = cohere.ClientV2(api_key=self.cohere_key)
+            prompt = self.get_human_prompt(blog_title, blog_topic)
+
+            response = client.generate(
+                model=self.cohere_model,
+                prompt=prompt,
+                max_tokens=2000,
+                temperature=0.85
+            )
+
+            if response.text:
+                self.provider_used = "Cohere"
+                logger.info(f"✓ Cohere succeeded")
+                return response.text
+            return None
+        except ImportError:
+            logger.warning("Cohere library not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Cohere failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_openai_human(self, blog_title, blog_topic):
+        """Regenerate with human characteristics using OpenAI"""
+        if not self.openai_key:
+            logger.debug("OpenAI API key not available, skipping OpenAI provider")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            logger.info("Attempting OpenAI provider...")
+            client = OpenAI(api_key=self.openai_key)
+            prompt = self.get_human_prompt(blog_title, blog_topic)
+
+            response = client.chat.completions.create(
+                model=self.openai_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.85
+            )
+
+            if response.choices and response.choices[0].message.content:
+                self.provider_used = "OpenAI"
+                logger.info(f"✓ OpenAI succeeded")
+                return response.choices[0].message.content
+            return None
+        except ImportError:
+            logger.warning("OpenAI library not installed")
+            return None
+        except Exception as e:
+            logger.error(f"OpenAI failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_human_characteristics(self, conn, blog_id, original_content):
+        """Regenerate content with human-like characteristics using multi-provider fallback"""
+        cursor = conn.cursor(dictionary=True)
+        query = "SELECT title, topic FROM blog_posts WHERE id = %s"
+        cursor.execute(query, (blog_id,))
+        blog = cursor.fetchone()
+        cursor.close()
+
+        logger.info(f"Regenerating with human-like characteristics (Attempt {self.current_attempt + 1})")
+        logger.info("Provider fallback chain: Groq → Gemini → Cohere → OpenAI")
+
+        # Try all providers in order
+        content = self.regenerate_with_groq_human(blog['title'], blog['topic'])
+
+        if not content:
+            logger.warning("Groq failed, trying Gemini...")
+            content = self.regenerate_with_gemini_human(blog['title'], blog['topic'])
+
+        if not content:
+            logger.warning("Gemini failed, trying Cohere...")
+            content = self.regenerate_with_cohere_human(blog['title'], blog['topic'])
+
+        if not content:
+            logger.warning("Cohere failed, trying OpenAI...")
+            content = self.regenerate_with_openai_human(blog['title'], blog['topic'])
+
+        if content:
+            logger.info(f"Content regenerated successfully via {self.provider_used}")
+            return content
+        else:
+            logger.error("All providers failed - unable to regenerate content")
             return None
 
     def save_ai_detection_result(self, conn, blog_id, ai_score, status):

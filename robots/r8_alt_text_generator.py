@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R8: Alt-Text Generator & Optimizer
+R8: Alt-Text Generator & Optimizer (Multi-Provider Fallback)
 Purpose: Generate SEO-optimized, ADA-compliant alt text for images
 Input: Images (from R7), blog post content
 Output: Alt text for each image (keyword + descriptive + context)
@@ -8,6 +8,8 @@ Frequency: Every 6 hours (parallel with R7)
 Dependencies: R7 (provides images)
 ADA Compliance: All alt text must be accessible and descriptive
 Format: "{keyword} - {descriptive alt text}"
+
+Provider Chain: Groq → Gemini → Cohere → OpenAI
 """
 
 import os
@@ -15,7 +17,7 @@ import sys
 import mysql.connector
 from datetime import datetime
 import logging
-from groq import Groq
+import traceback
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -35,9 +37,26 @@ class AltTextGenerator:
             'password': os.getenv('DB_PASSWORD', ''),
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
-        self.groq_key = os.getenv("GROQ_API_KEY", "")
-        self.groq_model = os.getenv("GROQ_MODEL")  # Flexible: accepts any model from environment
+
+        # Check available API keys - all optional since we have fallback chain
+        self.groq_key = os.getenv("GROQ_API_KEY")
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.cohere_key = os.getenv("COHERE_API_KEY")
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+
+        # Model names - FROM ENVIRONMENT VARIABLES
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
+
+        # Check that at least ONE API key is available
+        if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
+            logger.error("CRITICAL: No LLM API keys found!")
+            sys.exit(1)
+
         self.alt_texts_generated = 0
+        self.provider_used = None
 
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
@@ -128,18 +147,12 @@ class AltTextGenerator:
             logger.error(f"Error extracting context: {str(e)}")
             return {'intro': '', 'headers': [], 'has_list': False}
 
-    def generate_alt_text(self, conn, blog_data, image, keywords, context):
-        """Generate SEO-optimized, ADA-compliant alt text"""
-        try:
-            if not self.groq_key:
-                return None
+    def get_alt_text_prompt(self, blog_data, image, keywords, context):
+        """Generate the shared alt text prompt for all providers"""
+        primary_keyword = keywords[0] if keywords else blog_data['topic']
+        secondary_keywords = ", ".join(keywords[1:4]) if len(keywords) > 1 else ""
 
-            client = Groq(api_key=self.groq_key)
-
-            primary_keyword = keywords[0] if keywords else blog_data['topic']
-            secondary_keywords = ", ".join(keywords[1:4]) if len(keywords) > 1 else ""
-
-            prompt = f"""Generate an SEO-optimized, ADA-compliant alt text for an image.
+        prompt = f"""Generate an SEO-optimized, ADA-compliant alt text for an image.
 
 Image Details:
 - Source: {image['source']}
@@ -171,6 +184,20 @@ Examples of GOOD alt text:
 - "elderly woman doing gentle yoga poses for flexibility"
 
 Generate ONLY the alt text, no explanation."""
+        return prompt
+
+    def generate_alt_text_groq(self, blog_data, image, keywords, context):
+        """Generate alt text using Groq"""
+        if not self.groq_key:
+            logger.debug("Groq API key not available, skipping Groq provider")
+            return None
+
+        try:
+            from groq import Groq
+
+            logger.debug("Attempting Groq provider...")
+            client = Groq(api_key=self.groq_key)
+            prompt = self.get_alt_text_prompt(blog_data, image, keywords, context)
 
             response = client.chat.completions.create(
                 model=self.groq_model,
@@ -181,14 +208,134 @@ Generate ONLY the alt text, no explanation."""
 
             if response.choices and response.choices[0].message.content:
                 alt_text = response.choices[0].message.content.strip()
-                # Ensure it's under 120 chars (best practice)
                 if len(alt_text) > 120:
                     alt_text = alt_text[:117] + "..."
+                self.provider_used = "Groq"
                 return alt_text
             return None
-        except Exception as e:
-            logger.error(f"Alt text generation error: {str(e)}")
+        except ImportError:
+            logger.warning("Groq library not installed")
             return None
+        except Exception as e:
+            logger.debug(f"Groq failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def generate_alt_text_gemini(self, blog_data, image, keywords, context):
+        """Generate alt text using Gemini"""
+        if not self.gemini_key:
+            logger.debug("Gemini API key not available, skipping Gemini provider")
+            return None
+
+        try:
+            import google.generativeai as genai
+
+            logger.debug("Attempting Gemini provider...")
+            genai.configure(api_key=self.gemini_key)
+            prompt = self.get_alt_text_prompt(blog_data, image, keywords, context)
+
+            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
+            response = model.generate_content(prompt)
+
+            if response.text:
+                alt_text = response.text.strip()
+                if len(alt_text) > 120:
+                    alt_text = alt_text[:117] + "..."
+                self.provider_used = "Gemini"
+                return alt_text
+            return None
+        except ImportError:
+            logger.warning("Google Generative AI library not installed")
+            return None
+        except Exception as e:
+            logger.debug(f"Gemini failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def generate_alt_text_cohere(self, blog_data, image, keywords, context):
+        """Generate alt text using Cohere"""
+        if not self.cohere_key:
+            logger.debug("Cohere API key not available, skipping Cohere provider")
+            return None
+
+        try:
+            import cohere
+
+            logger.debug("Attempting Cohere provider...")
+            client = cohere.ClientV2(api_key=self.cohere_key)
+            prompt = self.get_alt_text_prompt(blog_data, image, keywords, context)
+
+            response = client.generate(
+                model=self.cohere_model,
+                prompt=prompt,
+                max_tokens=200,
+                temperature=0.7
+            )
+
+            if response.text:
+                alt_text = response.text.strip()
+                if len(alt_text) > 120:
+                    alt_text = alt_text[:117] + "..."
+                self.provider_used = "Cohere"
+                return alt_text
+            return None
+        except ImportError:
+            logger.warning("Cohere library not installed")
+            return None
+        except Exception as e:
+            logger.debug(f"Cohere failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def generate_alt_text_openai(self, blog_data, image, keywords, context):
+        """Generate alt text using OpenAI"""
+        if not self.openai_key:
+            logger.debug("OpenAI API key not available, skipping OpenAI provider")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            logger.debug("Attempting OpenAI provider...")
+            client = OpenAI(api_key=self.openai_key)
+            prompt = self.get_alt_text_prompt(blog_data, image, keywords, context)
+
+            response = client.chat.completions.create(
+                model=self.openai_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.7
+            )
+
+            if response.choices and response.choices[0].message.content:
+                alt_text = response.choices[0].message.content.strip()
+                if len(alt_text) > 120:
+                    alt_text = alt_text[:117] + "..."
+                self.provider_used = "OpenAI"
+                return alt_text
+            return None
+        except ImportError:
+            logger.warning("OpenAI library not installed")
+            return None
+        except Exception as e:
+            logger.debug(f"OpenAI failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def generate_alt_text(self, conn, blog_data, image, keywords, context):
+        """Generate SEO-optimized, ADA-compliant alt text using multi-provider fallback"""
+        # Try all providers in order
+        alt_text = self.generate_alt_text_groq(blog_data, image, keywords, context)
+
+        if not alt_text:
+            alt_text = self.generate_alt_text_gemini(blog_data, image, keywords, context)
+
+        if not alt_text:
+            alt_text = self.generate_alt_text_cohere(blog_data, image, keywords, context)
+
+        if not alt_text:
+            alt_text = self.generate_alt_text_openai(blog_data, image, keywords, context)
+
+        if not alt_text:
+            logger.error("All providers failed - unable to generate alt text")
+
+        return alt_text
 
     def save_alt_text(self, conn, image_id, alt_text):
         """Save generated alt text to database"""

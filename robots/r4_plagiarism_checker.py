@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-R4: Plagiarism Checker
+R4: Plagiarism Checker (Multi-Provider Fallback)
 Purpose: Check plagiarism <5% using multiple sources; regenerate if flagged
 Input: Blog post content (from R3)
 Output: Approved content or regenerated content
 Frequency: Every 6 hours (after R3 completes)
 Dependencies: R3 (provides content)
 Threshold: <5% plagiarism = PASS, >5% = REGENERATE
+
+Provider Chain: Groq → Gemini → Cohere → OpenAI
 """
 
 import os
@@ -16,6 +18,7 @@ from datetime import datetime
 import requests
 from difflib import SequenceMatcher
 import logging
+import traceback
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,7 +32,7 @@ BLUE = '\033[94m'
 
 class PlagiarismChecker:
     def __init__(self):
-        """Initialize plagiarism checker"""
+        """Initialize plagiarism checker with multi-provider API support"""
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
             'user': os.getenv('DB_USER', 'root'),
@@ -37,10 +40,26 @@ class PlagiarismChecker:
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
         self.plagiarism_threshold = 0.05  # 5%
+
+        # Check available API keys - all optional since we have fallback chain
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.groq_model = os.getenv("GROQ_MODEL")  # Flexible: accepts any model from environment
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.cohere_key = os.getenv("COHERE_API_KEY")
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+
+        # Model names - FROM ENVIRONMENT VARIABLES
+        self.groq_model = os.getenv("GROQ_MODEL")
+        self.gemini_model = os.getenv("GEMINI_MODEL")
+        self.cohere_model = os.getenv("COHERE_MODEL")
+        self.openai_model = os.getenv("OPENAI_MODEL")
+
+        # Check that at least ONE API key is available
+        if not any([self.groq_key, self.gemini_key, self.cohere_key, self.openai_key]):
+            logger.warning("No LLM API keys found - will only do plagiarism checks without regeneration")
+
         self.max_retries = 3
         self.current_attempt = 0
+        self.provider_used = None
 
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
@@ -139,32 +158,11 @@ class PlagiarismChecker:
         logger.info(f"Plagiarism checks completed. Average: {avg_plagiarism:.2%}")
         return avg_plagiarism
 
-    def regenerate_content(self, conn, blog_id, original_content):
-        """Regenerate content using Groq with different prompt"""
-        try:
-            from groq import Groq
-
-            if not self.groq_key:
-                logger.error("GROQ_API_KEY not set")
-                return None
-
-            client = Groq(api_key=self.groq_key)
-
-            # Get blog details
-            cursor = conn.cursor(dictionary=True)
-            query = "SELECT title, topic FROM blog_posts WHERE id = %s"
-            cursor.execute(query, (blog_id,))
-            blog = cursor.fetchone()
-            cursor.close()
-
-            if not blog:
-                return None
-
-            logger.info(f"Regenerating content (Attempt {self.current_attempt + 1}/{self.max_retries})")
-
-            prompt = f"""Rewrite this blog post with completely different wording and structure.
-Title: {blog['title']}
-Topic: {blog['topic']}
+    def get_regeneration_prompt(self, blog_title, blog_topic):
+        """Generate the shared regeneration prompt for all providers"""
+        prompt = f"""Rewrite this blog post with completely different wording and structure.
+Title: {blog_title}
+Topic: {blog_topic}
 
 Guidelines:
 - Keep the same topic and key information
@@ -176,21 +174,167 @@ Guidelines:
 - Include [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders
 
 Return ONLY the rewritten content."""
+        return prompt
 
-            # Groq REQUIRES model parameter - use env var or default
-            logger.info(f"Regenerating with model: {self.groq_model}")
+    def regenerate_with_groq(self, blog_title, blog_topic):
+        """Regenerate content using Groq"""
+        if not self.groq_key:
+            logger.debug("Groq API key not available, skipping Groq provider")
+            return None
+
+        try:
+            from groq import Groq
+
+            logger.info("Attempting Groq provider...")
+            client = Groq(api_key=self.groq_key)
+            prompt = self.get_regeneration_prompt(blog_title, blog_topic)
+
             response = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2000,
-                temperature=0.9  # Higher temperature for more variation
+                temperature=0.9
             )
 
             if response.choices and response.choices[0].message.content:
+                self.provider_used = "Groq"
+                logger.info(f"✓ Groq succeeded")
                 return response.choices[0].message.content.strip()
             return None
+        except ImportError:
+            logger.warning("Groq library not installed")
+            return None
         except Exception as e:
-            logger.error(f"Regeneration error: {str(e)}")
+            logger.error(f"Groq failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_gemini(self, blog_title, blog_topic):
+        """Regenerate content using Gemini"""
+        if not self.gemini_key:
+            logger.debug("Gemini API key not available, skipping Gemini provider")
+            return None
+
+        try:
+            import google.generativeai as genai
+
+            logger.info("Attempting Gemini provider...")
+            genai.configure(api_key=self.gemini_key)
+            prompt = self.get_regeneration_prompt(blog_title, blog_topic)
+
+            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
+            response = model.generate_content(prompt)
+
+            if response.text:
+                self.provider_used = "Gemini"
+                logger.info(f"✓ Gemini succeeded")
+                return response.text
+            return None
+        except ImportError:
+            logger.warning("Google Generative AI library not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Gemini failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_cohere(self, blog_title, blog_topic):
+        """Regenerate content using Cohere"""
+        if not self.cohere_key:
+            logger.debug("Cohere API key not available, skipping Cohere provider")
+            return None
+
+        try:
+            import cohere
+
+            logger.info("Attempting Cohere provider...")
+            client = cohere.ClientV2(api_key=self.cohere_key)
+            prompt = self.get_regeneration_prompt(blog_title, blog_topic)
+
+            response = client.generate(
+                model=self.cohere_model,
+                prompt=prompt,
+                max_tokens=2000,
+                temperature=0.9
+            )
+
+            if response.text:
+                self.provider_used = "Cohere"
+                logger.info(f"✓ Cohere succeeded")
+                return response.text
+            return None
+        except ImportError:
+            logger.warning("Cohere library not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Cohere failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_with_openai(self, blog_title, blog_topic):
+        """Regenerate content using OpenAI"""
+        if not self.openai_key:
+            logger.debug("OpenAI API key not available, skipping OpenAI provider")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            logger.info("Attempting OpenAI provider...")
+            client = OpenAI(api_key=self.openai_key)
+            prompt = self.get_regeneration_prompt(blog_title, blog_topic)
+
+            response = client.chat.completions.create(
+                model=self.openai_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.9
+            )
+
+            if response.choices and response.choices[0].message.content:
+                self.provider_used = "OpenAI"
+                logger.info(f"✓ OpenAI succeeded")
+                return response.choices[0].message.content
+            return None
+        except ImportError:
+            logger.warning("OpenAI library not installed")
+            return None
+        except Exception as e:
+            logger.error(f"OpenAI failed: {type(e).__name__}: {str(e)}")
+            return None
+
+    def regenerate_content(self, conn, blog_id, original_content):
+        """Regenerate content using multi-provider fallback chain"""
+        # Get blog details
+        cursor = conn.cursor(dictionary=True)
+        query = "SELECT title, topic FROM blog_posts WHERE id = %s"
+        cursor.execute(query, (blog_id,))
+        blog = cursor.fetchone()
+        cursor.close()
+
+        if not blog:
+            return None
+
+        logger.info(f"Regenerating content (Attempt {self.current_attempt + 1}/{self.max_retries})")
+        logger.info("Provider fallback chain: Groq → Gemini → Cohere → OpenAI")
+
+        # Try all providers in order
+        content = self.regenerate_with_groq(blog['title'], blog['topic'])
+
+        if not content:
+            logger.warning("Groq failed, trying Gemini...")
+            content = self.regenerate_with_gemini(blog['title'], blog['topic'])
+
+        if not content:
+            logger.warning("Gemini failed, trying Cohere...")
+            content = self.regenerate_with_cohere(blog['title'], blog['topic'])
+
+        if not content:
+            logger.warning("Cohere failed, trying OpenAI...")
+            content = self.regenerate_with_openai(blog['title'], blog['topic'])
+
+        if content:
+            logger.info(f"Content regenerated successfully via {self.provider_used}")
+            return content
+        else:
+            logger.error("All providers failed - unable to regenerate content")
             return None
 
     def save_plagiarism_result(self, conn, blog_id, plagiarism_score, status):
