@@ -244,15 +244,16 @@ Add [[INTERNAL_LINK:topic]] and [[AFFILIATE_LINK:product]] placeholders"""
         try:
             cursor = conn.cursor()
 
+            # Handle topic_id - if no topic, insert NULL (topic_id can be updated later by other robots)
             query = """
-                INSERT INTO blog_posts (title_id, title, content, topic, status, ready_for_wordpress, final_qa_passed, version, created_at)
+                INSERT INTO blog_posts (title_id, title, content, topic_id, status, ready_for_wordpress, final_qa_passed, version, created_at)
                 VALUES (%s, %s, %s, %s, 'draft', TRUE, TRUE, 1, NOW())
             """
             cursor.execute(query, (
                 title_data['id'],
                 title_data['title'],
                 content,
-                title_data['topic']
+                None  # topic_id - NULL if no topic assigned yet (can be set by other robots later)
             ))
 
             blog_id = cursor.lastrowid
