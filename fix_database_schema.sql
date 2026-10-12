@@ -1,16 +1,5 @@
 SET FOREIGN_KEY_CHECKS=0;
 
-DROP TABLE IF EXISTS topic_rotation_backup;
-ALTER TABLE IF EXISTS topic_rotation RENAME TO topic_rotation_backup;
-DROP TABLE IF EXISTS blog_titles_backup;
-ALTER TABLE IF EXISTS blog_titles RENAME TO blog_titles_backup;
-DROP TABLE IF EXISTS blog_posts_backup;
-ALTER TABLE IF EXISTS blog_posts RENAME TO blog_posts_backup;
-DROP TABLE IF EXISTS trending_keywords_backup;
-ALTER TABLE IF EXISTS trending_keywords RENAME TO trending_keywords_backup;
-
-SET FOREIGN_KEY_CHECKS=1;
-
 CREATE TABLE IF NOT EXISTS topic_rotation (
     id INT PRIMARY KEY AUTO_INCREMENT,
     topic_name VARCHAR(255) NOT NULL UNIQUE,
@@ -26,21 +15,18 @@ CREATE TABLE IF NOT EXISTS blog_titles (
     topic_id INT NOT NULL,
     title VARCHAR(500) NOT NULL,
     generated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    used_status ENUM('pending', 'used', 'rejected') DEFAULT 'pending',
-    FOREIGN KEY (topic_id) REFERENCES topic_rotation(id)
+    used_status ENUM('pending', 'used', 'rejected') DEFAULT 'pending'
 );
 
 CREATE TABLE IF NOT EXISTS blog_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    title_id INT NOT NULL,
-    topic_id INT NOT NULL,
-    content LONGTEXT NOT NULL,
+    title_id INT,
+    topic_id INT,
+    content LONGTEXT,
     status ENUM('draft', 'pending', 'published', 'failed') DEFAULT 'draft',
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     published_date TIMESTAMP NULL,
-    qa_check_passed BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (title_id) REFERENCES blog_titles(id),
-    FOREIGN KEY (topic_id) REFERENCES topic_rotation(id)
+    qa_check_passed BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS trending_keywords (
@@ -55,236 +41,214 @@ CREATE TABLE IF NOT EXISTS trending_keywords (
 
 CREATE TABLE IF NOT EXISTS plagiarism_checks (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     plagiarism_percentage DECIMAL(5,2) DEFAULT 0,
     check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('pending', 'checked', 'passed', 'failed') DEFAULT 'pending',
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    status ENUM('pending', 'checked', 'passed', 'failed') DEFAULT 'pending'
 );
 
 CREATE TABLE IF NOT EXISTS ai_detection_results (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     ai_score DECIMAL(5,2) DEFAULT 0,
     is_ai_generated BOOLEAN DEFAULT FALSE,
     check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    detection_method VARCHAR(255),
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    detection_method VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS keyword_optimization (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
-    keyword VARCHAR(255) NOT NULL,
+    blog_post_id INT,
+    keyword VARCHAR(255),
     keyword_density DECIMAL(5,2),
     placement_count INT DEFAULT 0,
-    optimization_status ENUM('pending', 'optimized', 'failed') DEFAULT 'pending',
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    optimization_status ENUM('pending', 'optimized', 'failed') DEFAULT 'pending'
 );
 
 CREATE TABLE IF NOT EXISTS image_metadata (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     image_url VARCHAR(500),
     image_alt_text VARCHAR(255),
     image_title VARCHAR(255),
     source_url VARCHAR(500),
-    usage_rights VARCHAR(100),
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    usage_rights VARCHAR(100)
 );
 
 CREATE TABLE IF NOT EXISTS image_alt_text (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    image_metadata_id INT NOT NULL,
+    image_metadata_id INT,
     alt_text VARCHAR(500),
     generated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('pending', 'generated', 'approved') DEFAULT 'pending',
-    FOREIGN KEY (image_metadata_id) REFERENCES image_metadata(id)
+    status ENUM('pending', 'generated', 'approved') DEFAULT 'pending'
 );
 
 CREATE TABLE IF NOT EXISTS qa_verification (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     format_check BOOLEAN DEFAULT FALSE,
     content_quality_score INT,
     readability_score INT,
     seo_score INT,
-    verification_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    verification_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS social_media_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     platform VARCHAR(50),
     post_content VARCHAR(500),
     post_url VARCHAR(500),
     published_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    engagement_count INT DEFAULT 0,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    engagement_count INT DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS email_campaigns (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     subject_line VARCHAR(255),
     email_body LONGTEXT,
     scheduled_date TIMESTAMP NULL,
     sent_date TIMESTAMP NULL,
     open_rate DECIMAL(5,2) DEFAULT 0,
     click_rate DECIMAL(5,2) DEFAULT 0,
-    status ENUM('draft', 'scheduled', 'sent') DEFAULT 'draft',
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    status ENUM('draft', 'scheduled', 'sent') DEFAULT 'draft'
 );
 
 CREATE TABLE IF NOT EXISTS email_scheduler (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    email_campaign_id INT NOT NULL,
+    email_campaign_id INT,
     scheduled_send_time TIMESTAMP NULL,
     actual_send_time TIMESTAMP NULL,
     delivery_status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
-    retry_count INT DEFAULT 0,
-    FOREIGN KEY (email_campaign_id) REFERENCES email_campaigns(id)
+    retry_count INT DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS analytics_events (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     event_type VARCHAR(100),
     event_value INT,
     event_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     user_id VARCHAR(100),
-    session_id VARCHAR(100),
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    session_id VARCHAR(100)
 );
 
 CREATE TABLE IF NOT EXISTS headline_testing (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     headline_variant_a VARCHAR(500),
     headline_variant_b VARCHAR(500),
     variant_a_clicks INT DEFAULT 0,
     variant_b_clicks INT DEFAULT 0,
     winner VARCHAR(1),
-    test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS product_research (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     product_name VARCHAR(255),
     product_url VARCHAR(500),
     affiliate_link VARCHAR(500),
     commission_rate DECIMAL(5,2),
-    research_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    research_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS affiliate_links (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     affiliate_url VARCHAR(500),
     affiliate_network VARCHAR(100),
     product_category VARCHAR(100),
     injected_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     click_count INT DEFAULT 0,
     conversion_count INT DEFAULT 0,
-    revenue DECIMAL(10,2) DEFAULT 0,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    revenue DECIMAL(10,2) DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS wordpress_posts (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     wordpress_post_id VARCHAR(100),
     wordpress_url VARCHAR(500),
     published_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('published', 'draft', 'scheduled', 'failed') DEFAULT 'draft',
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    status ENUM('published', 'draft', 'scheduled', 'failed') DEFAULT 'draft'
 );
 
 CREATE TABLE IF NOT EXISTS social_distribution (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    wordpress_post_id INT NOT NULL,
+    wordpress_post_id INT,
     facebook_url VARCHAR(500),
     twitter_url VARCHAR(500),
     linkedin_url VARCHAR(500),
     instagram_url VARCHAR(500),
     pinterest_url VARCHAR(500),
-    distribution_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (wordpress_post_id) REFERENCES wordpress_posts(id)
+    distribution_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS social_engagement (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    social_distribution_id INT NOT NULL,
+    social_distribution_id INT,
     platform VARCHAR(50),
     likes INT DEFAULT 0,
     comments INT DEFAULT 0,
     shares INT DEFAULT 0,
     impressions INT DEFAULT 0,
     engagement_rate DECIMAL(5,2) DEFAULT 0,
-    checked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (social_distribution_id) REFERENCES social_distribution(id)
+    checked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS comment_moderation (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    wordpress_post_id INT NOT NULL,
+    wordpress_post_id INT,
     comment_text LONGTEXT,
     comment_author VARCHAR(255),
     comment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_approved BOOLEAN DEFAULT FALSE,
-    is_spam BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (wordpress_post_id) REFERENCES wordpress_posts(id)
+    is_spam BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS content_refresh (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    original_post_id INT NOT NULL,
+    original_post_id INT,
     refreshed_content LONGTEXT,
     refresh_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
-    FOREIGN KEY (original_post_id) REFERENCES blog_posts(id)
+    status ENUM('pending', 'completed', 'failed') DEFAULT 'pending'
 );
 
 CREATE TABLE IF NOT EXISTS content_revalidation (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     revalidation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_still_relevant BOOLEAN DEFAULT TRUE,
-    content_update_needed BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    content_update_needed BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS plagiarism_recheck (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     original_plagiarism_score DECIMAL(5,2),
     recheck_plagiarism_score DECIMAL(5,2),
     recheck_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('pending', 'passed', 'failed', 'needs_revision') DEFAULT 'pending',
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    status ENUM('pending', 'passed', 'failed', 'needs_revision') DEFAULT 'pending'
 );
 
 CREATE TABLE IF NOT EXISTS final_qa_verification (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     final_check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     all_checks_passed BOOLEAN DEFAULT FALSE,
-    issues_found VARCHAR(500),
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    issues_found VARCHAR(500)
 );
 
 CREATE TABLE IF NOT EXISTS static_links (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    blog_post_id INT NOT NULL,
+    blog_post_id INT,
     link_url VARCHAR(500),
     link_text VARCHAR(255),
     link_position INT,
-    injected_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (blog_post_id) REFERENCES blog_posts(id)
+    injected_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS system_error_log (
@@ -326,7 +290,7 @@ CREATE TABLE IF NOT EXISTS master_metrics (
     collection_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO topic_rotation (topic_name, sequence_number, is_active) VALUES
+INSERT IGNORE INTO topic_rotation (topic_name, sequence_number, is_active) VALUES
 ('Health and Fitness', 1, TRUE),
 ('Weight Loss', 2, FALSE),
 ('Muscle Building', 3, FALSE),
@@ -346,7 +310,7 @@ INSERT INTO topic_rotation (topic_name, sequence_number, is_active) VALUES
 ('Supplement Guide', 17, FALSE),
 ('Habit Building and Lifestyle', 18, FALSE);
 
-INSERT INTO trending_keywords (keyword, topic, search_volume, competition_level, trend_score) VALUES
+INSERT IGNORE INTO trending_keywords (keyword, topic, search_volume, competition_level, trend_score) VALUES
 ('health and fitness', 'Health and Fitness', 50000, 'High', 8.5),
 ('fitness tips', 'Health and Fitness', 40000, 'High', 8.2),
 ('health trends 2026', 'Health and Fitness', 25000, 'Medium', 8.8),
@@ -438,9 +402,4 @@ INSERT INTO trending_keywords (keyword, topic, search_volume, competition_level,
 ('daily routines', 'Habit Building and Lifestyle', 42000, 'Medium', 8.2),
 ('lifestyle tips', 'Habit Building and Lifestyle', 38000, 'Medium', 7.9);
 
-CREATE INDEX IF NOT EXISTS idx_blog_posts_topic ON blog_posts(topic_id);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
-CREATE INDEX IF NOT EXISTS idx_trending_keywords_topic ON trending_keywords(topic);
-CREATE INDEX IF NOT EXISTS idx_social_media_posts_platform ON social_media_posts(platform);
-CREATE INDEX IF NOT EXISTS idx_analytics_events_blog_post ON analytics_events(blog_post_id);
-CREATE INDEX IF NOT EXISTS idx_wordpress_posts_status ON wordpress_posts(status);
+SET FOREIGN_KEY_CHECKS=1;
