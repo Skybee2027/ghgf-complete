@@ -137,21 +137,33 @@ jobs:
 
         echo "Loading core schemas for R2-R3-R31 pipeline..."
         if [ -f database/R0_Base_Schema.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Base_Schema.sql 2>&1
-          echo "✓ Loaded R0_Base_Schema.sql"
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Base_Schema.sql 2>&1; then
+            echo "✓ Loaded R0_Base_Schema.sql"
+          else
+            echo "❌ ERROR loading R0_Base_Schema.sql"
+            exit 1
+          fi
         fi
 
         if [ -f database/R0_Migration_AddColumns.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_AddColumns.sql 2>&1
-          echo "✓ Loaded R0_Migration_AddColumns.sql"
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_AddColumns.sql 2>&1; then
+            echo "✓ Loaded R0_Migration_AddColumns.sql"
+          else
+            echo "❌ ERROR loading R0_Migration_AddColumns.sql"
+            exit 1
+          fi
         fi
 
         if [ -f database/R0_Migration_R2_RequiredColumns.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_R2_RequiredColumns.sql 2>&1
-          echo "✓ Loaded R0_Migration_R2_RequiredColumns.sql"
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_R2_RequiredColumns.sql 2>&1; then
+            echo "✓ Loaded R0_Migration_R2_RequiredColumns.sql"
+          else
+            echo "❌ ERROR loading R0_Migration_R2_RequiredColumns.sql"
+            exit 1
+          fi
         fi
 
-        echo "Core schemas loaded successfully."
+        echo "✅ Core schemas loaded successfully."
         echo "Database is now ready with all required tables and data for R2-R3-R31 pipeline."
         echo "Note: R37 and R14b schemas can be loaded later for monetization features."
     
