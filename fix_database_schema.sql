@@ -7,6 +7,18 @@
 -- STEP 1: BACKUP OLD TABLES (rename them with _old suffix)
 -- ============================================================================
 
+-- First, drop any existing _old tables from previous runs
+DROP TABLE IF EXISTS topic_rotation_old;
+DROP TABLE IF EXISTS blog_titles_old;
+DROP TABLE IF EXISTS blog_posts_old;
+DROP TABLE IF EXISTS plagiarism_checks_old;
+DROP TABLE IF EXISTS ai_detection_results_old;
+DROP TABLE IF EXISTS qa_verification_old;
+DROP TABLE IF EXISTS seo_optimization_old;
+DROP TABLE IF EXISTS trending_keywords_old;
+DROP TABLE IF EXISTS affiliate_products_old;
+
+-- Now rename current tables to _old for backup
 ALTER TABLE IF EXISTS topic_rotation RENAME TO topic_rotation_old;
 ALTER TABLE IF EXISTS blog_titles RENAME TO blog_titles_old;
 ALTER TABLE IF EXISTS blog_posts RENAME TO blog_posts_old;
