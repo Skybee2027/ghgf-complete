@@ -139,22 +139,20 @@ jobs:
 
         echo "Creating database and loading schema..."
         mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
+
+        echo "Loading core schemas for R2-R3-R31 pipeline..."
         if [ -f database/R0_Base_Schema.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Base_Schema.sql
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Base_Schema.sql 2>&1
           echo "✓ Loaded R0_Base_Schema.sql"
         fi
+
         if [ -f database/R0_Migration_AddColumns.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_AddColumns.sql
+          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_AddColumns.sql 2>&1
           echo "✓ Loaded R0_Migration_AddColumns.sql"
         fi
-        if [ -f database/R37_Database_Schema.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R37_Database_Schema.sql
-          echo "✓ Loaded R37_Database_Schema.sql"
-        fi
-        if [ -f database/R14b_Database_Schema.sql ]; then
-          mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R14b_Database_Schema.sql
-          echo "✓ Loaded R14b_Database_Schema.sql"
-        fi
+
+        echo "Core schemas loaded successfully."
+        echo "Note: R37 and R14b schemas can be loaded later for monetization features."
     
     - name: Run GHGF Pipeline
       run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
