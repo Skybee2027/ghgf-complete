@@ -31,6 +31,11 @@ env:
   COHERE_MODEL: ${{ secrets.COHERE_MODEL }}
   OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
+  # WordPress Configuration (for publishing)
+  WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
+  WORDPRESS_USER: ${{ secrets.WORDPRESS_USER || 'api_user' }}
+  WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
