@@ -75,11 +75,11 @@ PIPELINE = [
 def run_robot(robot_file, robot_name):
     """Execute a single robot and return success status"""
     robot_path = os.path.join(ROBOTS_DIR, robot_file)
-    
+
     if not os.path.exists(robot_path):
         logger.error(f"✗ {robot_name} - File not found: {robot_path}")
         return False
-    
+
     try:
         logger.info(f"▶ Running {robot_name}...")
         result = subprocess.run(
@@ -88,16 +88,41 @@ def run_robot(robot_file, robot_name):
             text=True,
             timeout=300  # 5 minute timeout per robot
         )
-        
+
         if result.returncode == 0:
             logger.info(f"✅ {robot_name} - SUCCESS")
             return True
         else:
             logger.warning(f"⚠️  {robot_name} - Non-zero exit code: {result.returncode}")
+
+            # Log FULL error output (not truncated!)
             if result.stderr:
-                logger.warning(f"   Error: {result.stderr[:200]}")
+                logger.warning(f"   STDERR Output:")
+                for line in result.stderr.split('\n'):
+                    if line.strip():
+                        logger.warning(f"      {line}")
+
+            if result.stdout:
+                logger.warning(f"   STDOUT Output:")
+                for line in result.stdout.split('\n'):
+                    if line.strip():
+                        logger.warning(f"      {line}")
+
+            # Also write to error log file for debugging
+            error_log_file = f"error_log_{robot_name.replace(': ', '_').replace(' ', '_')}.txt"
+            with open(error_log_file, 'w') as f:
+                f.write(f"Robot: {robot_name}\n")
+                f.write(f"Exit Code: {result.returncode}\n")
+                f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write("=== STDERR ===\n")
+                f.write(result.stderr)
+                f.write("\n\n=== STDOUT ===\n")
+                f.write(result.stdout)
+
+            logger.warning(f"   Full error logged to: {error_log_file}")
+
             return False
-            
+
     except subprocess.TimeoutExpired:
         logger.error(f"✗ {robot_name} - TIMEOUT (>5 min)")
         return False
