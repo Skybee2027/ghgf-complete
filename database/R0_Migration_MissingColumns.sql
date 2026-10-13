@@ -78,3 +78,43 @@ ADD INDEX IF NOT EXISTS idx_headline_locked (headline_locked),
 ADD INDEX IF NOT EXISTS idx_qa_check_passed (qa_check_passed),
 ADD INDEX IF NOT EXISTS idx_plagiarism_checked (plagiarism_checked),
 ADD INDEX IF NOT EXISTS idx_qi_check_passed (qi_check_passed);
+
+-- ============================================================================
+-- CRITICAL FIX: Add missing columns to image_tracking table
+-- Required by R7 (image_finder), R8 (alt_text_generator), R9 (qa_format_checker)
+-- ============================================================================
+
+-- Create image_tracking table with all required columns if it doesn't exist
+CREATE TABLE IF NOT EXISTS image_tracking (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    blog_id INT NOT NULL,
+    image_url VARCHAR(2000),
+    topic VARCHAR(255),
+    source VARCHAR(255),
+    title VARCHAR(500),
+    alt_text TEXT,
+    used_date DATE,
+    expires_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (blog_id) REFERENCES blog_posts(id),
+    INDEX (blog_id),
+    INDEX (topic),
+    INDEX (expires_date),
+    INDEX (created_at)
+);
+
+-- Add missing columns to image_tracking if table already exists
+ALTER TABLE image_tracking
+ADD COLUMN IF NOT EXISTS topic VARCHAR(255),
+ADD COLUMN IF NOT EXISTS source VARCHAR(255),
+ADD COLUMN IF NOT EXISTS title VARCHAR(500),
+ADD COLUMN IF NOT EXISTS alt_text TEXT,
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+-- Add indexes to image_tracking if they don't exist
+ALTER TABLE image_tracking
+ADD INDEX IF NOT EXISTS idx_topic (topic),
+ADD INDEX IF NOT EXISTS idx_expires_date (expires_date),
+ADD INDEX IF NOT EXISTS idx_created_at (created_at);

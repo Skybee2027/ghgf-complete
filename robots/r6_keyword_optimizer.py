@@ -95,9 +95,9 @@ class KeywordOptimizer:
         if total_words == 0:
             return content
 
-        # Target: 1.0% density (minimum requirement) - reduces word variance from 20%+ to <15%
-        # NOTE: Using 1.0% instead of 1.3% reduces keyword injections by ~35%, keeping variance under 20%
-        target_density = 0.010
+        # Target: 1.05% density - provides 0.05% safety margin above 1.0% minimum requirement
+        # This ensures measured density stays >= 1.0% even with rounding/calculation variations
+        target_density = 0.0105
         target_occurrences_per_keyword = max(4, round(total_words * target_density))
 
         logger.info(f"Content has {total_words} words. Target {target_occurrences_per_keyword} occurrences per keyword for {target_density*100}% density")
