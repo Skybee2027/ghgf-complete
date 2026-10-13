@@ -110,51 +110,45 @@ class KeywordOptimizer:
             if needed_count > 0:
                 logger.info(f"Keyword '{keyword}': {current_count} found, need {needed_count} more for {target_density*100}%")
 
-                # More aggressive injection strategy - add multiple keywords per paragraph
+                # OPTIMIZED: Use short inline injections (2-3 words) to minimize word count growth
+                # This prevents the 40% word variance problem while hitting keyword targets
+
+                short_injections = [
+                    f" and {keyword}",
+                    f", especially {keyword}",
+                    f" with {keyword}",
+                ]
+
                 paragraphs = optimized.split('</p>')
                 para_count = len(paragraphs)
+                remaining = needed_count
+                inject_idx = 0
 
-                if para_count > 1:
-                    # Distribute injections more aggressively across paragraphs
-                    # Allow multiple injections per paragraph if needed
-                    injections_per_para = max(1, needed_count // max(1, para_count - 1))
-                    remaining = needed_count
-
-                    # Phrases for varied, natural-sounding keyword injection
-                    phrases = [
-                        f". {keyword} is essential for fitness success.",
-                        f". The benefits of {keyword} are well-documented.",
-                        f". {keyword} plays a key role in achieving fitness goals.",
-                        f". Consider incorporating {keyword} into your routine.",
-                        f". Studies show {keyword} improves overall wellness.",
-                        f". {keyword} enhances your fitness journey.",
-                        f". Experts recommend {keyword} for better results.",
-                        f". {keyword} is crucial for long-term health.",
-                        f". Many people focus on {keyword} for fitness.",
-                        f". {keyword} contributes to overall wellness."
-                    ]
-
-                    phrase_idx = 0
-                    for i in range(1, para_count - 1):  # Skip first and last paragraphs
+                # Distribute across middle paragraphs (skip first and last)
+                if para_count > 2:
+                    for i in range(1, para_count - 1):
                         if remaining <= 0:
                             break
 
-                        # Add multiple injections to this paragraph if needed
-                        for _ in range(min(injections_per_para, remaining)):
-                            if para_count > 0 and i < len(paragraphs):
-                                phrase = phrases[phrase_idx % len(phrases)]
-                                paragraphs[i] = paragraphs[i].rstrip() + phrase
-                                phrase_idx += 1
-                                remaining -= 1
+                        # Find sentences in this paragraph and inject into them
+                        para = paragraphs[i]
+                        sentences = para.split('. ')
 
-                    # If still remaining (due to integer division), add to last safe paragraph
-                    if remaining > 0 and para_count > 2:
-                        for _ in range(remaining):
-                            phrase = phrases[phrase_idx % len(phrases)]
-                            paragraphs[para_count - 2] = paragraphs[para_count - 2].rstrip() + phrase
-                            phrase_idx += 1
+                        # Inject into middle sentences (avoid first and last)
+                        for j in range(max(0, len(sentences) - 2)):
+                            if remaining <= 0:
+                                break
 
-                    optimized = '</p>'.join(paragraphs)
+                            # Add short keyword phrase before the period
+                            injection = short_injections[inject_idx % len(short_injections)]
+                            # Replace period with injection + period
+                            sentences[j] = sentences[j].rstrip() + injection
+                            inject_idx += 1
+                            remaining -= 1
+
+                        paragraphs[i] = '. '.join(sentences)
+
+                optimized = '</p>'.join(paragraphs)
 
         # Enhance headers with first keyword
         if keywords:
