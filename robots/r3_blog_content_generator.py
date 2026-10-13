@@ -182,13 +182,14 @@ REQUIREMENTS:
 - CRITICAL: Each keyword MUST appear 3-4 times naturally throughout the post (1% keyword density minimum)
 - Age-appropriate for all ages (avoid overly technical jargon)
 - Medically accurate (include disclaimers like "consult a doctor")
-- Add internal link placeholders: [[INTERNAL_LINK:related_topic]]
-- Add affiliate link placeholders: [[AFFILIATE_LINK:product_type]]
+- MANDATORY: Include MINIMUM 2 internal link placeholders in different sections (e.g., [[INTERNAL_LINK:related_diet_tips]], [[INTERNAL_LINK:workout_routines]])
+- MANDATORY: Include MINIMUM 2 affiliate link placeholders (e.g., [[AFFILIATE_LINK:fitness_supplements]], [[AFFILIATE_LINK:exercise_equipment]])
 - Include practical tips and actionable advice
 - Use short paragraphs (2-3 sentences max)
 - Include at least 2 lists/bullet points
 - Professional, friendly tone
 - ENSURE EVERY OPENING TAG HAS A CLOSING TAG (balanced HTML)
+- VALIDATION CHECK: Count brackets in output - must have [[INTERNAL_LINK and [[AFFILIATE_LINK placeholders
 
 Topic: {topic}
 Keywords to naturally include (use 3-4 times each): {keywords_str}
@@ -481,6 +482,52 @@ Return ONLY the HTML content, no explanations or markdown."""
 
         return content
 
+    def ensure_internal_links(self, content):
+        """Ensure content has minimum 2 internal links, add them if needed"""
+        internal_link_count = content.count('[[INTERNAL_LINK')
+
+        if internal_link_count >= 2:
+            logger.info(f"✓ Content already has {internal_link_count} internal links")
+            return content
+
+        # Add internal links if missing or insufficient
+        logger.warning(f"Content has only {internal_link_count} internal links, adding more...")
+
+        # Find the middle paragraph position to insert first link
+        p_tags = []
+        idx = 0
+        while True:
+            idx = content.find('<p>', idx)
+            if idx == -1:
+                break
+            p_tags.append(idx)
+            idx += 1
+
+        if len(p_tags) >= 2:
+            # Insert after second paragraph
+            insert_pos = content.find('</p>', p_tags[1]) + 4
+            internal_link_1 = '[[INTERNAL_LINK:related_health_tips]]'
+            content = content[:insert_pos] + ' ' + internal_link_1+ ' ' + content[insert_pos:]
+
+            # Insert after fourth paragraph (if exists)
+            p_tags = []
+            idx = 0
+            while True:
+                idx = content.find('<p>', idx)
+                if idx == -1:
+                    break
+                p_tags.append(idx)
+                idx += 1
+
+            if len(p_tags) >= 4:
+                insert_pos = content.find('</p>', p_tags[3]) + 4
+                internal_link_2 = '[[INTERNAL_LINK:fitness_resources]]'
+                content = content[:insert_pos] + ' ' + internal_link_2 + ' ' + content[insert_pos:]
+
+        updated_count = content.count('[[INTERNAL_LINK')
+        logger.info(f"✓ Added internal links - now has {updated_count} total")
+        return content
+
     def validate_content(self, content):
         """Validate generated content quality"""
         issues = []
@@ -497,9 +544,14 @@ Return ONLY the HTML content, no explanations or markdown."""
             if tag not in content:
                 issues.append(f"Missing required HTML tag: {tag}")
 
-        # Check placeholders
+        # Check affiliate link placeholders
         if '[[AFFILIATE_LINK' not in content:
             issues.append("Missing affiliate link placeholders")
+
+        # Check internal link placeholders (CRITICAL for R9 QA validation)
+        internal_link_count = content.count('[[INTERNAL_LINK')
+        if internal_link_count < 2:
+            issues.append(f"Insufficient internal links: {internal_link_count} found, need minimum 2")
 
         if issues:
             logger.warning(f"Content validation warnings: {issues}")
@@ -632,6 +684,11 @@ Return ONLY the HTML content, no explanations or markdown."""
 
             content = self.inject_missing_keywords(content, keywords)
             print(f"  ✓ Keywords optimized for SEO\n")
+
+            # Step 4b: Ensure internal links are present (required for R9 QA validation)
+            print(f"{BOLD}Step 4b: Ensuring Internal Links{RESET}")
+            content = self.ensure_internal_links(content)
+            print(f"  ✓ Internal links validated\n")
 
             # Step 5: Validate content
             print(f"{BOLD}Step 5: Validating Content Quality{RESET}")
