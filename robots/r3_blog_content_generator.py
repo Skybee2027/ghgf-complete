@@ -213,7 +213,9 @@ Return ONLY the HTML content, no explanations or markdown."""
             client = Groq(api_key=self.groq_key)
             prompt = self.get_prompt(title, keywords, topic)
 
+            logger.info(f"Prompt length: {len(prompt)} characters")
             logger.info(f"Calling Groq API with model: {self.groq_model}")
+
             response = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[{"role": "user", "content": prompt}],
@@ -223,10 +225,16 @@ Return ONLY the HTML content, no explanations or markdown."""
 
             if response.choices and response.choices[0].message.content:
                 content = response.choices[0].message.content.strip()
+                word_count = len(content.split())
                 self.content_generated = True
                 self.content_length = len(content)
                 self.provider_used = "Groq"
-                logger.info(f"✓ Groq succeeded: {self.content_length} characters")
+                logger.info(f"✓ Groq succeeded: {self.content_length} characters, ~{word_count} words")
+
+                if word_count < 500:
+                    logger.warning(f"⚠ WARNING: Groq returned very short content ({word_count} words)")
+                    logger.warning(f"  Response preview: {content[:200]}...")
+
                 return content
             else:
                 logger.error("Groq returned empty response")
@@ -255,6 +263,7 @@ Return ONLY the HTML content, no explanations or markdown."""
             genai.configure(api_key=self.gemini_key)
             prompt = self.get_prompt(title, keywords, topic)
 
+            logger.info(f"Prompt length: {len(prompt)} characters")
             logger.info(f"Calling Google Gemini API with model: {self.gemini_model if self.gemini_model else '(default)'}")
 
             if self.gemini_model:
@@ -266,10 +275,16 @@ Return ONLY the HTML content, no explanations or markdown."""
 
             if response.text:
                 content = response.text
+                word_count = len(content.split())
                 self.content_generated = True
                 self.content_length = len(content)
                 self.provider_used = "Gemini"
-                logger.info(f"✓ Gemini succeeded: {self.content_length} characters")
+                logger.info(f"✓ Gemini succeeded: {self.content_length} characters, ~{word_count} words")
+
+                if word_count < 500:
+                    logger.warning(f"⚠ WARNING: Gemini returned very short content ({word_count} words)")
+                    logger.warning(f"  Response preview: {content[:200]}...")
+
                 return content
             else:
                 logger.error("Gemini returned empty response")
@@ -298,6 +313,7 @@ Return ONLY the HTML content, no explanations or markdown."""
             client = cohere.ClientV2(api_key=self.cohere_key)
             prompt = self.get_prompt(title, keywords, topic)
 
+            logger.info(f"Prompt length: {len(prompt)} characters")
             logger.info(f"Calling Cohere API with model: {self.cohere_model}")
             response = client.generate(
                 model=self.cohere_model,
@@ -308,10 +324,16 @@ Return ONLY the HTML content, no explanations or markdown."""
 
             if response.text:
                 content = response.text
+                word_count = len(content.split())
                 self.content_generated = True
                 self.content_length = len(content)
                 self.provider_used = "Cohere"
-                logger.info(f"✓ Cohere succeeded: {self.content_length} characters")
+                logger.info(f"✓ Cohere succeeded: {self.content_length} characters, ~{word_count} words")
+
+                if word_count < 500:
+                    logger.warning(f"⚠ WARNING: Cohere returned very short content ({word_count} words)")
+                    logger.warning(f"  Response preview: {content[:200]}...")
+
                 return content
             else:
                 logger.error("Cohere returned empty response")
@@ -340,6 +362,7 @@ Return ONLY the HTML content, no explanations or markdown."""
             client = OpenAI(api_key=self.openai_key)
             prompt = self.get_prompt(title, keywords, topic)
 
+            logger.info(f"Prompt length: {len(prompt)} characters")
             logger.info(f"Calling OpenAI API with model: {self.openai_model}")
             response = client.chat.completions.create(
                 model=self.openai_model,
@@ -350,10 +373,16 @@ Return ONLY the HTML content, no explanations or markdown."""
 
             if response.choices and response.choices[0].message.content:
                 content = response.choices[0].message.content
+                word_count = len(content.split())
                 self.content_generated = True
                 self.content_length = len(content)
                 self.provider_used = "OpenAI"
-                logger.info(f"✓ OpenAI succeeded: {self.content_length} characters")
+                logger.info(f"✓ OpenAI succeeded: {self.content_length} characters, ~{word_count} words")
+
+                if word_count < 500:
+                    logger.warning(f"⚠ WARNING: OpenAI returned very short content ({word_count} words)")
+                    logger.warning(f"  Response preview: {content[:200]}...")
+
                 return content
             else:
                 logger.error("OpenAI returned empty response")
@@ -675,7 +704,8 @@ Return ONLY the HTML content, no explanations or markdown."""
                 logger.error("Failed to generate content from all providers (Groq, Gemini, Cohere, OpenAI)")
                 return False
 
-            print(f"  ✓ {GREEN}Content generated via {self.provider_used}: {self.content_length} characters{RESET}\n")
+            word_count_initial = len(content.split())
+            print(f"  ✓ {GREEN}Content generated via {self.provider_used}: {self.content_length} characters (~{word_count_initial} words){RESET}\n")
 
             # Step 4: Fix HTML tags and inject keywords
             print(f"{BOLD}Step 4: Fixing HTML Tags & Optimizing Keywords{RESET}")
@@ -714,8 +744,26 @@ Return ONLY the HTML content, no explanations or markdown."""
             print(f"  Title: {BLUE}{title_data['title']}{RESET}")
             print(f"  Blog ID: {BLUE}{blog_id}{RESET}")
             print(f"  Topic: {title_data['topic']}")
-            print(f"  Content Length: {GREEN}{self.content_length} characters{RESET}")
+            print(f"  Provider Used: {BLUE}{self.provider_used}{RESET}")
+            print(f"  Initial Content: {word_count_initial} words")
+
+            final_word_count = len(content.split())
+            print(f"  Final Content: {GREEN}{final_word_count} words{RESET}")
+            print(f"  Content Length: {GREEN}{len(content)} characters{RESET}")
             print(f"  Keywords Used: {len(keywords)}")
+
+            # Check final content quality
+            html_tags = content.count('<p>') + content.count('<h2>')
+            internal_links = content.count('[[INTERNAL_LINK')
+            affiliate_links = content.count('[[AFFILIATE_LINK')
+
+            print(f"  HTML Tags: {html_tags}")
+            print(f"  Internal Links: {internal_links}")
+            print(f"  Affiliate Links: {affiliate_links}")
+
+            if final_word_count < 800:
+                print(f"  {RED}⚠ WARNING: Content shorter than 800 words target{RESET}")
+
             print(f"  Status: {GREEN}SUCCESS - Ready for R4 (Plagiarism Check){RESET}")
             print('='*70 + "\n")
 
