@@ -389,14 +389,14 @@ Return ONLY the HTML content, no explanations."""
         try:
             cursor = conn.cursor(dictionary=True)
 
-            # Get a default topic_id and topic name from topic_rotation and topics tables
+            # Get a default topic_id and topic name from topics table
             topic_id = None
             topic_name = None
             try:
                 cursor.execute("""
-                    SELECT tr.id as topic_id, t.name as topic_name
-                    FROM topic_rotation tr
-                    JOIN topics t ON tr.topic_id = t.id
+                    SELECT id as topic_id, name as topic_name
+                    FROM topics
+                    ORDER BY monthly_searches DESC
                     LIMIT 1
                 """)
                 topic_result = cursor.fetchone()

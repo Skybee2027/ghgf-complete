@@ -367,16 +367,28 @@ Generate ONLY the alt text, no explanation."""
             print(f"{BOLD}Step 1: Fetching Latest Blog with Images (from R7){RESET}")
             blog_data = self.get_latest_blog_with_images(conn)
             if not blog_data:
-                logger.error("No blog posts with images found")
-                return False
+                logger.warning("No blog posts with images found - R7 may not have found images")
+                logger.info("Alt-text generation skipped (images not yet available from R7)")
+                print(f"  ⚠ No images found - skipping alt-text generation\n")
+                print(f"{'='*70}")
+                print(f"{BOLD}SUMMARY{RESET}")
+                print(f"  Status: {YELLOW}PASS (no images to process){RESET}")
+                print('='*70 + "\n")
+                return True
             print(f"  ✓ Blog ID: {BLUE}{blog_data['id']}{RESET}")
             print(f"  ✓ Title: {blog_data['title']}\n")
 
             print(f"{BOLD}Step 2: Retrieving Images from R7{RESET}")
             images = self.get_images_for_blog(conn, blog_data['id'])
             if not images:
-                logger.error("No images found for blog post")
-                return False
+                logger.warning("No images found for blog post")
+                logger.info("Alt-text generation skipped (no images in database)")
+                print(f"  ⚠ No images found - skipping alt-text generation\n")
+                print(f"{'='*70}")
+                print(f"{BOLD}SUMMARY{RESET}")
+                print(f"  Status: {YELLOW}PASS (no images to process){RESET}")
+                print('='*70 + "\n")
+                return True
             print(f"  ✓ Found {len(images)} images\n")
 
             print(f"{BOLD}Step 3: Getting Topic Keywords{RESET}")

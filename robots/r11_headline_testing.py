@@ -161,7 +161,7 @@ class HeadlineTester:
             quality_score, quality_details = self.analyze_headline_quality(headline['title'])
 
             # Combine quality score with CTR score from R2
-            ctr_score = headline['ctr_score'] if headline['ctr_score'] else 0
+            ctr_score = float(headline['ctr_score']) if headline['ctr_score'] else 0.0
 
             # Weighted combination: 60% CTR (R2's testing), 40% quality analysis
             combined_score = (ctr_score * 0.6) + (quality_score * 0.4)
