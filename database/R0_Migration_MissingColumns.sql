@@ -54,7 +54,12 @@ ADD COLUMN IF NOT EXISTS qa_check_passed BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS qa_checked_at TIMESTAMP NULL,
 ADD COLUMN IF NOT EXISTS plagiarism_checked BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS qi_check_passed BOOLEAN DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS revalidation_report TEXT;
+ADD COLUMN IF NOT EXISTS revalidation_report TEXT,
+ADD COLUMN IF NOT EXISTS revalidation_checked_at TIMESTAMP NULL,
+ADD COLUMN IF NOT EXISTS selected_headline_id INT,
+ADD COLUMN IF NOT EXISTS headline_testing_passed BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS headline_tested_at TIMESTAMP NULL,
+ADD COLUMN IF NOT EXISTS headline_test_results TEXT;
 
 -- Create indexes for performance
 ALTER TABLE blog_posts
