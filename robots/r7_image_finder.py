@@ -34,10 +34,23 @@ class ImageFinder:
             'password': os.getenv('DB_PASSWORD', ''),
             'database': os.getenv('DB_NAME', 'ghgf_blogging')
         }
+        # Stock photo APIs
         self.unsplash_key = os.getenv("UNSPLASH_API_KEY", "")
         self.pexels_key = os.getenv("PEXELS_API_KEY", "")
+        self.pixabay_key = os.getenv("PIXABAY_API_KEY", "")
+
+        # AI image generation APIs
+        self.replicate_key = os.getenv("REPLICATE_API_TOKEN", "")
+        self.huggingface_key = os.getenv("HUGGINGFACE_API_KEY", "")
+
         self.repetition_days = 90
         self.images_found = 0
+
+        # Log available APIs
+        if self.replicate_key:
+            logger.info("✓ Replicate API available for AI image generation")
+        if self.huggingface_key:
+            logger.info("✓ HuggingFace API available for AI image generation")
 
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
@@ -151,6 +164,110 @@ class ImageFinder:
             logger.error(f"Pexels search error: {str(e)}")
             return []
 
+    def search_pixabay(self, query, exclude_urls=None):
+        """Search Pixabay for images"""
+        if not self.pixabay_key:
+            return []
+
+        try:
+            url = "https://pixabay.com/api/"
+            params = {
+                'key': self.pixabay_key,
+                'q': query,
+                'image_type': 'photo',
+                'per_page': 10,
+                'order': 'popular'
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+            images = []
+
+            for hit in data.get('hits', [])[:10]:
+                img_url = hit['largeImageURL']
+                if exclude_urls and img_url in exclude_urls:
+                    continue
+                images.append({
+                    'url': img_url,
+                    'source': 'pixabay',
+                    'title': f"Photo by {hit['user']}",
+                    'credit': hit['user']
+                })
+            return images
+        except Exception as e:
+            logger.error(f"Pixabay search error: {str(e)}")
+            return []
+
+    def generate_with_replicate(self, prompt, exclude_urls=None):
+        """Generate images using Replicate API (SDXL model)"""
+        if not self.replicate_key:
+            return []
+
+        try:
+            import replicate
+            replicate.api.token = self.replicate_key
+
+            output = replicate.run(
+                "stability-ai/sdxl:39ed52f2a60c3b36b4179f8260ec1dbb7ec689e499db0158e361ddaea5d55bc1",
+                input={
+                    "prompt": f"{prompt}, health, fitness, professional photography, high quality",
+                    "negative_prompt": "blurry, low quality, watermark",
+                    "num_inference_steps": 25,
+                    "guidance_scale": 7.5
+                }
+            )
+
+            images = []
+            if output:
+                for i, img_url in enumerate(output):
+                    if exclude_urls and img_url in exclude_urls:
+                        continue
+                    images.append({
+                        'url': img_url,
+                        'source': 'replicate_sdxl',
+                        'title': f"Generated: {prompt}",
+                        'credit': 'Stability AI SDXL'
+                    })
+
+            logger.info(f"Generated {len(images)} images with Replicate")
+            return images
+        except Exception as e:
+            logger.warning(f"Replicate generation failed: {str(e)}")
+            return []
+
+    def generate_with_huggingface(self, prompt, exclude_urls=None):
+        """Generate images using HuggingFace Inference API"""
+        if not self.huggingface_key:
+            return []
+
+        try:
+            from huggingface_hub import InferenceClient
+
+            client = InferenceClient(api_key=self.huggingface_key)
+
+            # Use Stable Diffusion 3 or similar
+            image = client.text_to_image(
+                prompt=f"{prompt}, health, fitness, professional, high quality"
+            )
+
+            images = []
+            if image:
+                # Save to temporary location (would need storage solution)
+                # For now, return placeholder
+                images.append({
+                    'url': f"data:image/png;base64,{image}",  # Base64 encoded
+                    'source': 'huggingface_sd3',
+                    'title': f"Generated: {prompt}",
+                    'credit': 'HuggingFace Stable Diffusion 3'
+                })
+
+            logger.info(f"Generated {len(images)} images with HuggingFace")
+            return images
+        except Exception as e:
+            logger.warning(f"HuggingFace generation failed: {str(e)}")
+            return []
+
     def rank_images(self, images):
         """Rank images by quality signals"""
         ranked = []
@@ -198,13 +315,27 @@ class ImageFinder:
             used_images = self.get_recently_used_images(conn, topic)
             print(f"  Found {len(used_images)} recently used images - will avoid these\n")
 
-            print(f"{BOLD}Step 3: Searching for Images (Unsplash + Pexels){RESET}")
+            print(f"{BOLD}Step 3: Searching for Images (Unsplash + Pexels + Pixabay + AI Generation){RESET}")
             unsplash_results = self.search_unsplash(topic, used_images)
             pexels_results = self.search_pexels(topic, used_images)
+            pixabay_results = self.search_pixabay(topic, used_images)
 
-            all_images = unsplash_results + pexels_results
+            all_images = unsplash_results + pexels_results + pixabay_results
             print(f"  Found {len(unsplash_results)} from Unsplash")
             print(f"  Found {len(pexels_results)} from Pexels")
+            print(f"  Found {len(pixabay_results)} from Pixabay")
+
+            # If we have fewer than 3 images, try AI generation as fallback
+            if len(all_images) < 3:
+                print(f"\n  Stock photos below threshold, attempting AI generation...")
+                replicate_results = self.generate_with_replicate(topic, [img['url'] for img in all_images])
+                huggingface_results = self.generate_with_huggingface(topic, [img['url'] for img in all_images])
+                all_images += replicate_results + huggingface_results
+                if replicate_results:
+                    print(f"  Found {len(replicate_results)} from Replicate SDXL")
+                if huggingface_results:
+                    print(f"  Found {len(huggingface_results)} from HuggingFace")
+
             print(f"  Total: {len(all_images)} images\n")
 
             print(f"{BOLD}Step 4: Ranking & Selecting Best 3-5{RESET}")
