@@ -95,11 +95,35 @@ class AffiliateLinksInjector:
             except Exception as e:
                 logger.debug(f"Could not verify/add product_url column: {str(e)}")
 
-            # Query with explicit column selection
+            # Ensure all required columns exist (migration auto-apply)
+            required_columns = [
+                ('product_url', 'VARCHAR(1000)'),
+                ('description', 'TEXT'),
+                ('commission_rate', 'DECIMAL(5, 2)'),
+                ('score', 'DECIMAL(5, 2)')
+            ]
+
+            for col_name, col_type in required_columns:
+                try:
+                    alter_query = f"""
+                        ALTER TABLE affiliate_products
+                        ADD COLUMN IF NOT EXISTS {col_name} {col_type}
+                    """
+                    cursor.execute(alter_query)
+                    logger.debug(f"Ensured {col_name} column exists")
+                except Exception as e:
+                    logger.debug(f"Could not verify/add {col_name} column: {str(e)}")
+
+            conn.commit()
+
+            # Query with safe column selection using COALESCE
             query = """
                 SELECT id, product_name,
                        COALESCE(product_url, '') as product_url,
-                       description, commission_rate, source_network
+                       COALESCE(description, 'Product recommendation') as description,
+                       COALESCE(commission_rate, 5.0) as commission_rate,
+                       COALESCE(source_network, 'affiliate') as source_network,
+                       COALESCE(score, 50) as score
                 FROM affiliate_products
                 WHERE blog_id = %s
                 ORDER BY score DESC
@@ -111,7 +135,11 @@ class AffiliateLinksInjector:
             return results
         except Exception as e:
             logger.error(f"Error getting affiliate products: {str(e)}")
-            logger.error(f"This may be due to missing product_url column. Run: ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000);")
+            logger.error(f"Missing columns detected. Auto-apply failed. Run these manually:")
+            logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000);")
+            logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS description TEXT;")
+            logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5, 2);")
+            logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS score DECIMAL(5, 2);")
             return []
 
     def build_product_cta(self, product, template_type='recommendation'):

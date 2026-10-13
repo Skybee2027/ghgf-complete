@@ -366,11 +366,11 @@ Return ONLY the HTML content, no explanations or markdown."""
             return None
 
     def fix_html_tags(self, content):
-        """Fix unbalanced HTML tags in content"""
+        """Fix unbalanced HTML tags in content - aggressive reconstruction"""
         import re
 
-        # List of tags to balance
-        tags_to_balance = ['p', 'h2', 'h3', 'ul', 'li']
+        # Process tags with focus on <p> which is most problematic
+        tags_to_balance = ['p', 'li', 'ul', 'h2', 'h3']
 
         for tag in tags_to_balance:
             opening_pattern = f'<{tag}[^>]*>'
@@ -382,22 +382,40 @@ Return ONLY the HTML content, no explanations or markdown."""
             if opening_count != closing_count:
                 logger.warning(f"Tag mismatch for <{tag}>: {opening_count} opening vs {closing_count} closing")
 
-                # If more closing tags than opening, remove extras
-                if closing_count > opening_count:
-                    for _ in range(closing_count - opening_count):
-                        content = re.sub(f'</{tag}>', '', content, count=1)
-                        logger.debug(f"Removed extra closing </{tag}> tag")
+                # For <p> tags, use aggressive reconstruction
+                if tag == 'p':
+                    # Find all <p> opening tags and their positions
+                    p_opens = [(m.start(), m.end()) for m in re.finditer(opening_pattern, content, re.IGNORECASE)]
+                    p_closes = [(m.start(), m.end()) for m in re.finditer(closing_pattern, content, re.IGNORECASE)]
 
-                # If more opening tags than closing, add missing closing tags
-                elif opening_count > closing_count:
-                    for _ in range(opening_count - closing_count):
-                        content += f'</{tag}>'
-                        logger.debug(f"Added missing closing </{tag}> tag")
+                    # If more opens than closes, add closes
+                    if len(p_opens) > len(p_closes):
+                        missing = len(p_opens) - len(p_closes)
+                        for _ in range(missing):
+                            content = content.rstrip() + f'\n</{tag}>'
+                        logger.debug(f"Added {missing} missing </{tag}> tags")
+
+                    # If more closes than opens, remove excess
+                    elif len(p_closes) > len(p_opens):
+                        excess = len(p_closes) - len(p_opens)
+                        for _ in range(excess):
+                            content = re.sub(f'</{tag}>$', '', content)
+                            if f'</{tag}>' in content:
+                                content = re.sub(f'</{tag}>', '', content, count=1)
+                        logger.debug(f"Removed {excess} extra </{tag}> tags")
+                else:
+                    # For other tags, simple balance
+                    if closing_count > opening_count:
+                        for _ in range(closing_count - opening_count):
+                            content = re.sub(f'</{tag}>', '', content, count=1)
+                    elif opening_count > closing_count:
+                        for _ in range(opening_count - closing_count):
+                            content += f'\n</{tag}>'
 
         return content
 
     def inject_missing_keywords(self, content, keywords):
-        """Inject missing keywords if they appear too rarely"""
+        """Inject missing keywords aggressively if they appear too rarely"""
         import re
 
         if not keywords:
@@ -405,43 +423,61 @@ Return ONLY the HTML content, no explanations or markdown."""
 
         for keyword_obj in keywords[:5]:
             keyword = keyword_obj['keyword'].lower()
+            keyword_title = keyword.title()
 
             # Count occurrences (case-insensitive)
             pattern = re.compile(re.escape(keyword), re.IGNORECASE)
             count = len(pattern.findall(content))
 
             # Calculate current density
-            word_count = len(content.split())
+            text_only = re.sub(r'<[^>]+>', '', content)
+            word_count = len(text_only.split())
             if word_count > 0:
                 current_density = (count / word_count) * 100
             else:
                 current_density = 0
 
-            # If keyword appears less than 1%, try to inject it
-            if current_density < 1.0 and count < 3:
-                logger.warning(f"Keyword '{keyword}' appears only {count} times ({current_density:.2f}% density) - injecting more instances")
+            # Target: 3-4 appearances minimum (ensure 1%+ density)
+            target_appearances = 4
+            needed = target_appearances - count
 
-                # Find <p> tags and inject keyword naturally
-                paragraphs = re.findall(r'<p>.*?</p>', content, re.DOTALL)
+            if needed > 0:
+                logger.warning(f"Keyword '{keyword}' at {current_density:.2f}% density ({count} times). Target: {target_appearances} times. Injecting {needed} more...")
 
-                injection_count = 0
-                target_count = max(3, int(word_count / 200))  # Target at least 3 times or 1% density
-                needed = target_count - count
-
-                if paragraphs and needed > 0:
-                    for i, para in enumerate(paragraphs[:needed]):
-                        # Find position to inject (after first sentence)
-                        text_content = para.replace('<p>', '').replace('</p>', '').strip()
-                        sentences = text_content.split('. ')
-
+                # Strategy 1: Split by </p> and inject into content blocks
+                sections = content.split('</p>')
+                for i in range(min(needed, len(sections) - 1)):  # Leave last section alone
+                    section = sections[i]
+                    if len(section) > 100:  # Only inject into substantial sections
+                        # Find last sentence in section
+                        sentences = section.split('. ')
                         if len(sentences) > 1:
-                            # Inject after first sentence
-                            injected_para = sentences[0] + '. ' + keyword.title() + ' ' + '. '.join(sentences[1:])
-                            content = content.replace(para, f'<p>{injected_para}</p>', 1)
-                            injection_count += 1
-                            logger.debug(f"Injected '{keyword}' into paragraph {i+1}")
+                            # Inject keyword before the last sentence
+                            sentences.insert(-1, keyword_title)
+                            sections[i] = '. '.join(sentences)
+                        else:
+                            # If no period, just append with sentence
+                            sections[i] = section + '. ' + keyword_title + '.'
 
-                logger.info(f"Injected keyword '{keyword}' {injection_count} times")
+                content = '</p>'.join(sections)
+
+                # Strategy 2: If still not enough, inject directly into text blocks
+                final_count = len(pattern.findall(content))
+                if final_count < target_appearances:
+                    still_needed = target_appearances - final_count
+                    # Find opening <h2> or <h3> tags and add keyword after them
+                    for _ in range(still_needed):
+                        if '<h2>' in content:
+                            content = content.replace('<h2>', f'<h2>{keyword_title} - ', 1)
+                        elif '<h3>' in content:
+                            content = content.replace('<h3>', f'<h3>{keyword_title} for ', 1)
+                        else:
+                            # Last resort: prepend to first paragraph
+                            content = f'<p>{keyword_title}:</p>' + content
+                            break
+
+                final_count = len(pattern.findall(content))
+                logger.info(f"Keyword '{keyword}' injected: now appears {final_count} times")
 
         return content
 
