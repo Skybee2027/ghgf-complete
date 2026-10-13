@@ -177,7 +177,7 @@ CRITICAL KEYWORD REQUIREMENTS:
 {keyword_injection}
 
 REQUIREMENTS:
-- Total length: 800-1500 words
+- Total length: 700-1300 words (leaves buffer for R6 keyword optimization, final target: <1500 words)
 - Write in HTML format with proper tags: <h2>, <h3>, <p>, <ul>, <li> - ALL TAGS MUST BE PROPERLY CLOSED
 - CRITICAL: Each keyword MUST appear 3-4 times naturally throughout the post (1% keyword density minimum)
 - Age-appropriate for all ages (avoid overly technical jargon)
@@ -875,8 +875,8 @@ Return the complete expanded blog post in HTML format."""
             print(f"  Internal Links: {internal_links}")
             print(f"  Affiliate Links: {affiliate_links}")
 
-            if final_word_count < 800:
-                print(f"  {RED}⚠ WARNING: Content shorter than 800 words target{RESET}")
+            if final_word_count < 700:
+                print(f"  {RED}⚠ WARNING: Content shorter than 700 words minimum{RESET}")
 
             print(f"  Status: {GREEN}SUCCESS - Ready for R4 (Plagiarism Check){RESET}")
             print('='*70 + "\n")
