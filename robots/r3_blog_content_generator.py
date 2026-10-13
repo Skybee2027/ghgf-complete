@@ -513,8 +513,11 @@ Return ONLY the HTML content, no explanations or markdown."""
 
         return content
 
-    def expand_content_to_minimum(self, content, title, keywords, topic, min_words=800):
-        """Expand content if it's too short - use same provider that generated it"""
+    def expand_content_to_minimum(self, content, title, keywords, topic, min_words=700):
+        """Expand content if it's too short - use same provider that generated it
+
+        Default: 700 words minimum (leaves ~250 word buffer for R6 keyword injection before 1500 max)
+        """
         word_count = len(content.split())
 
         if word_count >= min_words:
@@ -806,15 +809,17 @@ Return the complete expanded blog post in HTML format."""
             word_count_initial = len(content.split())
             print(f"  ✓ {GREEN}Content generated via {self.provider_used}: {self.content_length} characters (~{word_count_initial} words){RESET}\n")
 
-            # Step 3b: Enforce minimum content length (800 words)
-            print(f"{BOLD}Step 3b: Enforcing Minimum Content Length (800 words){RESET}")
-            if word_count_initial < 800:
-                logger.warning(f"Content below 800-word minimum ({word_count_initial} words). Attempting expansion...")
-                content = self.expand_content_to_minimum(content, title_data['title'], keywords, title_data['topic'], min_words=800)
+            # Step 3b: Enforce minimum content length (700 words, with buffer for R6 keyword injection)
+            print(f"{BOLD}Step 3b: Enforcing Minimum Content Length (700 words){RESET}")
+            if word_count_initial < 700:
+                logger.warning(f"Content below 700-word minimum ({word_count_initial} words). Attempting expansion...")
+                content = self.expand_content_to_minimum(content, title_data['title'], keywords, title_data['topic'], min_words=700)
                 word_count_expanded = len(content.split())
-                print(f"  ✓ Content expanded: {word_count_initial} → {word_count_expanded} words\n")
+                print(f"  ✓ Content expanded: {word_count_initial} → {word_count_expanded} words")
+                print(f"  ℹ Buffer note: R6 will add ~15-20 words for keywords (target: <1500 final)\n")
             else:
-                print(f"  ✓ Content meets minimum length requirement ({word_count_initial} words)\n")
+                print(f"  ✓ Content meets minimum length requirement ({word_count_initial} words)")
+                print(f"  ℹ Buffer note: R6 will add ~15-20 words for keywords (target: <1500 final)\n")
 
             # Step 4: Fix HTML tags and inject keywords
             print(f"{BOLD}Step 4: Fixing HTML Tags & Optimizing Keywords{RESET}")
