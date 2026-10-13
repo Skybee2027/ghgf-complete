@@ -40,6 +40,9 @@ PIPELINE = [
     ('r9_qa_format_checker_first_pass.py', 'R9: QA Format Checker - First Pass'),
     ('r10_revalidation_second_pass.py', 'R10: Revalidation Second Pass'),
 
+    # Deep Editorial Quality Review (R9.5) - NEW: AI-powered editorial quality check
+    ('r9_5_deep_content_reviewer.py', 'R9.5: Deep Content Reviewer'),
+
     # Enhancement & Validation (R11-R15)
     ('r11_headline_testing.py', 'R11: Headline Testing'),
     ('r12_product_research.py', 'R12: Product Research'),
