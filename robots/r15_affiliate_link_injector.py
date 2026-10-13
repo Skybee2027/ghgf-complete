@@ -100,6 +100,7 @@ class AffiliateLinksInjector:
                 ('product_url', 'VARCHAR(1000)'),
                 ('description', 'TEXT'),
                 ('commission_rate', 'DECIMAL(5, 2)'),
+                ('source_network', 'VARCHAR(100)'),
                 ('score', 'DECIMAL(5, 2)')
             ]
 

@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS affiliate_products (
     INDEX (created_at)
 );
 
+-- Add missing columns to existing affiliate_products table if they don't exist
+ALTER TABLE affiliate_products
+ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000),
+ADD COLUMN IF NOT EXISTS description TEXT,
+ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5, 2),
+ADD COLUMN IF NOT EXISTS source_network VARCHAR(100),
+ADD COLUMN IF NOT EXISTS score DECIMAL(5, 2) DEFAULT 0,
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
 -- Add product_url to affiliate tracking if it exists, or create a products reference
 CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
