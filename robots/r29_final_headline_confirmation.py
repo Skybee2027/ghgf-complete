@@ -63,14 +63,16 @@ class FinalHeadlineConfirmation:
         try:
             cursor = conn.cursor(dictionary=True)
 
+            # Changed from timestamp-based to flag-based detection
+            # This prevents race conditions where R29 runs before R10 completes
+            # Now processes posts where headline_locked is NULL or FALSE
             query = """
                 SELECT bp.id, bp.title, bp.content, bp.topic,
                        bp.qa_check_passed, bp.version
                 FROM blog_posts bp
                 WHERE bp.status = 'draft'
                 AND bp.qa_check_passed = TRUE
-                AND (bp.headline_confirmed_at IS NULL OR
-                     bp.headline_confirmed_at < DATE_SUB(NOW(), INTERVAL 1 DAY))
+                AND (bp.headline_locked IS NULL OR bp.headline_locked = FALSE)
                 ORDER BY bp.created_at DESC
                 LIMIT 30
             """
