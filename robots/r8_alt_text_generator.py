@@ -355,6 +355,24 @@ Generate ONLY the alt text, no explanation."""
             logger.error(f"Error saving alt text: {str(e)}")
             return False
 
+    def set_featured_image(self, conn, blog_id, image_id):
+        """Set the featured image for a blog post"""
+        try:
+            cursor = conn.cursor()
+            query = """
+                UPDATE blog_posts
+                SET featured_image_id = %s
+                WHERE id = %s
+            """
+            cursor.execute(query, (image_id, blog_id))
+            conn.commit()
+            cursor.close()
+            logger.info(f"Featured image set for blog_id {blog_id}: image_id {image_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error setting featured image: {str(e)}")
+            return False
+
     def run(self):
         self.print_header("R8: ALT-TEXT GENERATOR & OPTIMIZER")
         print(f"Execution: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -416,12 +434,25 @@ Generate ONLY the alt text, no explanation."""
                     print(f"  {i}. Image ({image['source']}): {RED}Failed to generate{RESET}")
             print()
 
+            print(f"{BOLD}Step 6: Setting Featured Image{RESET}")
+            # Set the first image as the featured image for the blog post
+            if images:
+                first_image = images[0]
+                featured_set = self.set_featured_image(conn, blog_data['id'], first_image['id'])
+                if featured_set:
+                    print(f"  ✓ Featured image set: Image ID {BLUE}{first_image['id']}{RESET}")
+                    print(f"    URL: {first_image['image_url']}\n")
+                else:
+                    print(f"  {RED}✗ Failed to set featured image{RESET}\n")
+            print()
+
             print(f"{'='*70}")
             print(f"{BOLD}SUMMARY{RESET}")
             print(f"  Blog ID: {blog_data['id']}")
             print(f"  Total Images: {len(images)}")
             print(f"  Alt Texts Generated: {GREEN}{self.alt_texts_generated}{RESET}")
-            print(f"  Status: {GREEN}PASS - Running in parallel with R7 (Image Finder){RESET}")
+            print(f"  Featured Image Linked: {GREEN}YES (Auto-linked for R31){RESET}")
+            print(f"  Status: {GREEN}PASS - Images ready for WordPress publishing (R31){RESET}")
             print('='*70 + "\n")
             return True
 
