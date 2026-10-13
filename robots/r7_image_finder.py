@@ -292,6 +292,59 @@ class ImageFinder:
             logger.warning(f"HuggingFace generation failed: {str(e)}")
             return []
 
+    def generate_placeholder_images(self, topic):
+        """Generate placeholder images from placeholder.com service (no API key needed)"""
+        try:
+            images = []
+            # Generate 5 placeholder images with health/fitness themed URLs
+            keywords = ["fitness", "health", "wellness", "exercise", "nutrition"]
+            for i, keyword in enumerate(keywords[:5], 1):
+                # Use placeholder service that generates images based on parameters
+                img_url = f"https://placeholder.com/800x600?text={topic.replace(' ', '+')}&random={i}"
+                images.append({
+                    'url': img_url,
+                    'source': 'placeholder_fallback',
+                    'title': f"Placeholder: {topic}",
+                    'credit': 'Placeholder.com'
+                })
+            logger.info(f"Generated {len(images)} placeholder images as fallback")
+            return images
+        except Exception as e:
+            logger.error(f"Placeholder generation failed: {str(e)}")
+            return []
+
+    def generate_unsplash_direct_images(self, topic, exclude_urls=None):
+        """Fallback: Use Unsplash with random endpoint (no API key required for limited access)"""
+        try:
+            images = []
+            # Unsplash random endpoint doesn't require auth but has rate limits
+            # This is a fallback when no API key is available
+            url = "https://api.unsplash.com/napi/random/photos"
+            params = {
+                'query': topic,
+                'count': 5,
+                'orientation': 'landscape'
+            }
+
+            response = requests.get(url, params=params, timeout=5)
+            if response.status_code == 200:
+                results = response.json() if isinstance(response.json(), list) else [response.json()]
+                for img in results:
+                    if 'urls' in img:
+                        img_url = img['urls'].get('regular')
+                        if img_url and (not exclude_urls or img_url not in exclude_urls):
+                            images.append({
+                                'url': img_url,
+                                'source': 'unsplash_fallback',
+                                'title': img.get('description', 'Image'),
+                                'credit': img['user'].get('name', 'Unsplash')
+                            })
+                logger.info(f"Found {len(images)} images via Unsplash fallback")
+                return images
+        except Exception as e:
+            logger.debug(f"Unsplash fallback failed: {str(e)}")
+            return []
+
     def rank_images(self, images):
         """Rank images by quality signals"""
         ranked = []
@@ -359,6 +412,20 @@ class ImageFinder:
                     print(f"  Found {len(replicate_results)} from Replicate SDXL")
                 if huggingface_results:
                     print(f"  Found {len(huggingface_results)} from HuggingFace")
+
+            # Last resort: Use Unsplash fallback or placeholder if still no images
+            if len(all_images) < 3:
+                print(f"\n  {YELLOW}⚠️  No images from configured APIs - using fallback sources...{RESET}")
+                unsplash_fallback = self.generate_unsplash_direct_images(topic, [img['url'] for img in all_images])
+                all_images += unsplash_fallback
+                if unsplash_fallback:
+                    print(f"  Found {len(unsplash_fallback)} from Unsplash fallback")
+
+            if len(all_images) < 3:
+                print(f"  {YELLOW}⚠️  Generating placeholder images...{RESET}")
+                placeholder_results = self.generate_placeholder_images(topic)
+                all_images += placeholder_results
+                print(f"  Generated {len(placeholder_results)} placeholder images")
 
             print(f"  Total: {len(all_images)} images\n")
 
