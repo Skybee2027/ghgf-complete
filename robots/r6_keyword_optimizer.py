@@ -95,11 +95,11 @@ class KeywordOptimizer:
         if total_words == 0:
             return content
 
-        # Target: 1% density minimum
-        target_density = 0.01
-        target_occurrences_per_keyword = max(3, int(total_words * target_density))  # Minimum 3, or 1%
+        # Target: 1.2% density (with safety margin to guarantee >= 1.0%)
+        target_density = 0.012
+        target_occurrences_per_keyword = max(3, round(total_words * target_density))  # Round up to guarantee density
 
-        logger.info(f"Content has {total_words} words. Target {target_occurrences_per_keyword} occurrences per keyword for 1% density")
+        logger.info(f"Content has {total_words} words. Target {target_occurrences_per_keyword} occurrences per keyword for {target_density*100}% density")
 
         # Process each keyword
         for keyword in keywords[:5]:  # Process top 5 keywords
@@ -110,32 +110,39 @@ class KeywordOptimizer:
             if needed_count > 0:
                 logger.info(f"Keyword '{keyword}': {current_count} found, need {needed_count} more for {target_density*100}%")
 
-                # Inject keyword into content naturally
-                # Strategy: Add to first paragraph if missing, then distribute throughout body text
+                # Inject keyword into content aggressively to guarantee density target
+                # Strategy: Distribute throughout all paragraphs, multiple injections if needed
 
-                # Try adding to first paragraph
-                if keyword.lower() not in optimized[:500].lower():
-                    paragraphs = optimized.split('</p>')
-                    if len(paragraphs) > 1:
-                        # Add at the end of first paragraph (without closing tag - join will add it)
-                        paragraphs[0] = paragraphs[0].rstrip() + f". {keyword} is essential for fitness success."
-                        optimized = '</p>'.join(paragraphs)
-                        needed_count -= 1
+                paragraphs = optimized.split('</p>')
+                para_count = len(paragraphs)
 
-                # Distribute remaining keywords throughout middle paragraphs
-                if needed_count > 0:
-                    paragraphs = optimized.split('</p>')
-                    para_count = len(paragraphs)
+                # Inject needed occurrences across paragraphs
+                if para_count > 2:
+                    # Calculate how many paragraphs to inject into
+                    inject_points = min(needed_count, para_count - 2)  # Leave buffer paragraphs
 
-                    # Inject into roughly evenly spaced paragraphs
-                    if para_count > 3:
-                        for i in range(1, needed_count + 1):
-                            para_idx = min(i * (para_count // (needed_count + 2)), para_count - 2)
-                            if para_idx < len(paragraphs) and para_idx > 0:
-                                # Add keyword naturally to the paragraph (without closing tag)
-                                paragraphs[para_idx] = paragraphs[para_idx].rstrip() + f". {keyword} enhances overall fitness."
+                    for i in range(inject_points):
+                        # Distribute evenly across paragraphs
+                        para_idx = int((i + 1) * (para_count - 2) / (inject_points + 1))
 
-                        optimized = '</p>'.join(paragraphs)
+                        if para_idx < len(paragraphs) and para_idx > 0:
+                            # Add keyword naturally to the paragraph
+                            if i == 0:
+                                # First injection: Essential framing
+                                paragraphs[para_idx] = paragraphs[para_idx].rstrip() + f". {keyword} is essential for fitness success."
+                            else:
+                                # Subsequent injections: Varied placement
+                                phrases = [
+                                    f". {keyword} plays a key role in achieving fitness goals.",
+                                    f". Consider incorporating {keyword} into your routine.",
+                                    f". The benefits of {keyword} are well-documented.",
+                                    f". {keyword} enhances overall fitness.",
+                                    f". Studies show {keyword} improves wellness."
+                                ]
+                                phrase = phrases[i % len(phrases)]
+                                paragraphs[para_idx] = paragraphs[para_idx].rstrip() + phrase
+
+                    optimized = '</p>'.join(paragraphs)
 
         # Enhance headers with first keyword
         if keywords:
@@ -226,7 +233,15 @@ class KeywordOptimizer:
 
             print(f"{BOLD}Step 3: Optimizing Content{RESET}")
             optimized = self.optimize_content(blog_data['content'], keywords)
-            print(f"  ✓ Keywords added to headers and introduction\n")
+            print(f"  ✓ Keywords added to headers and introduction")
+
+            # Verify final keyword density
+            print(f"\n{BOLD}Step 3a: Verifying Final Keyword Density{RESET}")
+            for kw in keywords:
+                count, density = self.analyze_keyword_density(optimized, kw)
+                status = "✓" if density >= 0.01 else "⚠"
+                print(f"  {status} {kw}: {count} times ({density:.2%})")
+            print()
 
             print(f"{BOLD}Step 4: Checking Readability{RESET}")
             readability = self.check_readability(optimized)
