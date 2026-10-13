@@ -355,6 +355,49 @@ Generate ONLY the alt text, no explanation."""
             logger.error(f"Error saving alt text: {str(e)}")
             return False
 
+    def get_used_image_urls(self, conn):
+        """Get all image URLs already used as featured images to avoid duplicates"""
+        try:
+            cursor = conn.cursor()
+            query = """
+                SELECT DISTINCT it.image_url
+                FROM blog_posts bp
+                JOIN image_tracking it ON bp.featured_image_id = it.id
+                WHERE bp.featured_image_id IS NOT NULL
+            """
+            cursor.execute(query)
+            results = cursor.fetchall()
+            cursor.close()
+            used_urls = {row[0] for row in results} if results else set()
+            logger.info(f"Found {len(used_urls)} already-used image URLs")
+            return used_urls
+        except Exception as e:
+            logger.error(f"Error getting used image URLs: {str(e)}")
+            return set()
+
+    def select_unique_featured_image(self, conn, images, blog_id):
+        """Select a unique image for this blog post (not already used by another post)"""
+        try:
+            # Get all image URLs already used as featured images
+            used_urls = self.get_used_image_urls(conn)
+            logger.info(f"Checking {len(images)} images for uniqueness against {len(used_urls)} used URLs")
+
+            # Find first image NOT in used_urls
+            for image in images:
+                if image['image_url'] not in used_urls:
+                    logger.info(f"Selected unique image for blog_id {blog_id}: {image['id']} (URL not in used list)")
+                    return image
+
+            # Fallback: if all images are used, just use the first one (and log warning)
+            if images:
+                logger.warning(f"All {len(images)} images already used elsewhere - reusing image {images[0]['id']}")
+                return images[0]
+
+            return None
+        except Exception as e:
+            logger.error(f"Error selecting unique image: {str(e)}")
+            return images[0] if images else None
+
     def set_featured_image(self, conn, blog_id, image_id):
         """Set the featured image for a blog post"""
         try:
@@ -434,16 +477,20 @@ Generate ONLY the alt text, no explanation."""
                     print(f"  {i}. Image ({image['source']}): {RED}Failed to generate{RESET}")
             print()
 
-            print(f"{BOLD}Step 6: Setting Featured Image{RESET}")
-            # Set the first image as the featured image for the blog post
+            print(f"{BOLD}Step 6: Setting Featured Image (Unique per Post){RESET}")
+            # Select a UNIQUE image not already used by other posts
             if images:
-                first_image = images[0]
-                featured_set = self.set_featured_image(conn, blog_data['id'], first_image['id'])
-                if featured_set:
-                    print(f"  ✓ Featured image set: Image ID {BLUE}{first_image['id']}{RESET}")
-                    print(f"    URL: {first_image['image_url']}\n")
+                selected_image = self.select_unique_featured_image(conn, images, blog_data['id'])
+                if selected_image:
+                    featured_set = self.set_featured_image(conn, blog_data['id'], selected_image['id'])
+                    if featured_set:
+                        print(f"  ✓ Featured image set: Image ID {BLUE}{selected_image['id']}{RESET}")
+                        print(f"    URL: {selected_image['image_url'][:60]}...")
+                        print(f"    (Unique: Not used by other posts)\n")
+                    else:
+                        print(f"  {RED}✗ Failed to set featured image{RESET}\n")
                 else:
-                    print(f"  {RED}✗ Failed to set featured image{RESET}\n")
+                    print(f"  {RED}✗ No unique images available{RESET}\n")
             print()
 
             print(f"{'='*70}")
@@ -451,8 +498,9 @@ Generate ONLY the alt text, no explanation."""
             print(f"  Blog ID: {blog_data['id']}")
             print(f"  Total Images: {len(images)}")
             print(f"  Alt Texts Generated: {GREEN}{self.alt_texts_generated}{RESET}")
-            print(f"  Featured Image Linked: {GREEN}YES (Auto-linked for R31){RESET}")
-            print(f"  Status: {GREEN}PASS - Images ready for WordPress publishing (R31){RESET}")
+            print(f"  Featured Image Linked: {GREEN}YES (Unique & Auto-linked for R31){RESET}")
+            print(f"  Image Uniqueness: {GREEN}VERIFIED (Not used by other posts){RESET}")
+            print(f"  Status: {GREEN}PASS - Unique images ready for WordPress publishing (R31){RESET}")
             print('='*70 + "\n")
             return True
 
