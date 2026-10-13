@@ -97,7 +97,16 @@ class WordPressUploaderPublisher:
             logger.info(f"Found {len(results) if results else 0} posts ready to publish (status=draft, ready_for_wordpress=TRUE, final_qa_passed=TRUE)")
             return results
         except Exception as e:
-            logger.error(f"Error getting posts: {str(e)}")
+            error_msg = f"CRITICAL ERROR getting posts: {str(e)}"
+            logger.error(error_msg)
+            print(f"\n{RED}{error_msg}{RESET}")
+            print(f"{RED}This means R31 cannot find posts to publish!{RESET}")
+            print(f"{RED}Possible causes:{RESET}")
+            print(f"  1. One or more columns in SELECT don't exist in blog_posts table")
+            print(f"  2. Database connection is closed or invalid")
+            print(f"  3. SQL syntax error in the query")
+            print(f"\n{RED}Full error details:{RESET}")
+            print(f"{RED}{str(e)}{RESET}\n")
             return []
 
     def get_featured_image_url(self, conn, image_id):
@@ -299,13 +308,25 @@ class WordPressUploaderPublisher:
                     cursor.execute("SELECT COUNT(*) as qa FROM blog_posts WHERE final_qa_passed=TRUE")
                     qa_passed = cursor.fetchone()['qa']
 
+                    cursor.execute("SELECT COUNT(*) as wp_published FROM blog_posts WHERE wordpress_post_id IS NOT NULL")
+                    wp_published = cursor.fetchone()['wp_published']
+
                     cursor.close()
 
                     print(f"  DEBUG INFO:")
                     print(f"    Total posts in DB: {total}")
                     print(f"    Draft status: {draft}")
                     print(f"    Ready for WordPress: {ready}")
-                    print(f"    QA Passed: {qa_passed}\n")
+                    print(f"    QA Passed: {qa_passed}")
+                    print(f"    Already Published to WP: {wp_published}")
+
+                    if ready > 0 and qa_passed > 0:
+                        print(f"\n  {YELLOW}⚠️  POSSIBLE ISSUE: Posts are marked ready but R31 query is not finding them!{RESET}")
+                        print(f"  {YELLOW}This usually means one of the SELECT columns doesn't exist in blog_posts table.{RESET}")
+                        print(f"  {YELLOW}Run 'database/setup_database.sql' to ensure all columns exist.{RESET}\n")
+                    else:
+                        print(f"\n  INFO: Previous robots (R29, R30) may not have set the required flags yet.\n")
+
                 except Exception as e:
                     print(f"    (Could not get debug info: {str(e)})\n")
 
