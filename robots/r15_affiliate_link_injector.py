@@ -97,6 +97,7 @@ class AffiliateLinksInjector:
 
             # Ensure all required columns exist (migration auto-apply)
             required_columns = [
+                ('blog_id', 'INT'),
                 ('product_url', 'VARCHAR(1000)'),
                 ('description', 'TEXT'),
                 ('commission_rate', 'DECIMAL(5, 2)'),
@@ -137,6 +138,7 @@ class AffiliateLinksInjector:
         except Exception as e:
             logger.error(f"Error getting affiliate products: {str(e)}")
             logger.error(f"Missing columns detected. Auto-apply failed. Run these manually:")
+            logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS blog_id INT;")
             logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000);")
             logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS description TEXT;")
             logger.error(f"  ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5, 2);")

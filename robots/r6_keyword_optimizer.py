@@ -117,8 +117,8 @@ class KeywordOptimizer:
                 if keyword.lower() not in optimized[:500].lower():
                     paragraphs = optimized.split('</p>')
                     if len(paragraphs) > 1:
-                        # Add at the end of first paragraph before closing tag
-                        paragraphs[0] = paragraphs[0].rstrip() + f". {keyword} is essential for fitness success.</p>"
+                        # Add at the end of first paragraph (without closing tag - join will add it)
+                        paragraphs[0] = paragraphs[0].rstrip() + f". {keyword} is essential for fitness success."
                         optimized = '</p>'.join(paragraphs)
                         needed_count -= 1
 
@@ -132,7 +132,7 @@ class KeywordOptimizer:
                         for i in range(1, needed_count + 1):
                             para_idx = min(i * (para_count // (needed_count + 2)), para_count - 2)
                             if para_idx < len(paragraphs) and para_idx > 0:
-                                # Add keyword naturally to the paragraph
+                                # Add keyword naturally to the paragraph (without closing tag)
                                 paragraphs[para_idx] = paragraphs[para_idx].rstrip() + f". {keyword} enhances overall fitness."
 
                         optimized = '</p>'.join(paragraphs)

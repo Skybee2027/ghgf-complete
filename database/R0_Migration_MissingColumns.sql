@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS affiliate_products (
 
 -- Add missing columns to existing affiliate_products table if they don't exist
 ALTER TABLE affiliate_products
+ADD COLUMN IF NOT EXISTS blog_id INT,
 ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000),
 ADD COLUMN IF NOT EXISTS description TEXT,
 ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5, 2),
