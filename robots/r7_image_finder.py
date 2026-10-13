@@ -354,9 +354,11 @@ class ImageFinder:
         return sorted(ranked, key=lambda x: x['score'], reverse=True)
 
     def save_images(self, conn, images, blog_id, topic):
-        """Save selected images to database"""
+        """Save selected images to database and update blog_posts images_found count"""
         try:
             cursor = conn.cursor()
+
+            # Save each image to image_tracking
             for img in images:
                 query = """
                     INSERT INTO image_tracking (image_url, topic, used_date, blog_id, expires_date)
@@ -364,9 +366,18 @@ class ImageFinder:
                 """
                 expires = datetime.now() + timedelta(days=self.repetition_days)
                 cursor.execute(query, (img['url'], topic, blog_id, self.repetition_days))
+
+            # Update blog_posts table with images_found count
+            update_query = """
+                UPDATE blog_posts
+                SET images_found = %s
+                WHERE id = %s
+            """
+            cursor.execute(update_query, (len(images), blog_id))
+
             conn.commit()
             cursor.close()
-            logger.info(f"Saved {len(images)} images to database")
+            logger.info(f"Saved {len(images)} images to database and updated blog_posts.images_found")
             return True
         except Exception as e:
             logger.error(f"Error saving images: {str(e)}")
