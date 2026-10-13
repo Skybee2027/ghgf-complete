@@ -478,8 +478,8 @@ class ImageFinder:
             print(f"{BOLD}SUMMARY{RESET}")
             print(f"  Topic: {topic}")
             print(f"  Images Found: {GREEN}{self.images_found}{RESET}")
-            # Success if we found images (regardless of database save)
-            success = len(all_images) >= 3
+            # Success ONLY if images were found AND saved to database
+            success = images_saved and len(all_images) >= 3
             status_color = GREEN if success else RED
             print(f"  Status: {status_color}{'PASS' if success else 'FAIL'} - Running in parallel with R8 (Alt-Text){RESET}")
             print('='*70 + "\n")
