@@ -513,6 +513,103 @@ Return ONLY the HTML content, no explanations or markdown."""
 
         return content
 
+    def expand_content_to_minimum(self, content, title, keywords, topic, min_words=800):
+        """Expand content if it's too short - use same provider that generated it"""
+        word_count = len(content.split())
+
+        if word_count >= min_words:
+            logger.info(f"✓ Content already meets minimum ({word_count} words >= {min_words} words)")
+            return content
+
+        logger.warning(f"Content too short: {word_count} words (minimum {min_words}). Attempting expansion...")
+
+        # Create expansion prompt
+        expansion_prompt = f"""The following blog post is too short ({word_count} words). Please expand it to at least {min_words} words while maintaining quality and keyword density.
+
+Original content:
+{content}
+
+EXPANSION REQUIREMENTS:
+- Expand to at least {min_words} words
+- Add more details to existing sections
+- Add new subsections if needed
+- Keep the same HTML structure and keywords
+- Maintain all placeholder links: [[INTERNAL_LINK...]] and [[AFFILIATE_LINK...]]
+- Return ONLY the expanded HTML content, no explanations
+
+Return the complete expanded blog post in HTML format."""
+
+        expanded = None
+
+        # Try same provider that generated original content
+        if self.provider_used == "Groq" and self.groq_key:
+            try:
+                from groq import Groq
+                client = Groq(api_key=self.groq_key)
+                response = client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": expansion_prompt}],
+                    max_tokens=3000,
+                    temperature=0.7
+                )
+                if response.choices and response.choices[0].message.content:
+                    expanded = response.choices[0].message.content.strip()
+                    logger.info(f"✓ Groq expansion succeeded: {len(expanded.split())} words")
+                    return expanded
+            except Exception as e:
+                logger.warning(f"Groq expansion failed: {str(e)}")
+
+        elif self.provider_used == "Gemini" and self.gemini_key:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=self.gemini_key)
+                model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
+                response = model.generate_content(expansion_prompt)
+                if response.text:
+                    expanded = response.text
+                    logger.info(f"✓ Gemini expansion succeeded: {len(expanded.split())} words")
+                    return expanded
+            except Exception as e:
+                logger.warning(f"Gemini expansion failed: {str(e)}")
+
+        elif self.provider_used == "Cohere" and self.cohere_key:
+            try:
+                import cohere
+                client = cohere.ClientV2(api_key=self.cohere_key)
+                response = client.generate(
+                    model=self.cohere_model,
+                    prompt=expansion_prompt,
+                    max_tokens=3000,
+                    temperature=0.7
+                )
+                if response.text:
+                    expanded = response.text
+                    logger.info(f"✓ Cohere expansion succeeded: {len(expanded.split())} words")
+                    return expanded
+            except Exception as e:
+                logger.warning(f"Cohere expansion failed: {str(e)}")
+
+        elif self.provider_used == "OpenAI" and self.openai_key:
+            try:
+                from openai import OpenAI
+                client = OpenAI(api_key=self.openai_key)
+                response = client.chat.completions.create(
+                    model=self.openai_model,
+                    messages=[{"role": "user", "content": expansion_prompt}],
+                    max_tokens=3000,
+                    temperature=0.7
+                )
+                if response.choices and response.choices[0].message.content:
+                    expanded = response.choices[0].message.content
+                    logger.info(f"✓ OpenAI expansion succeeded: {len(expanded.split())} words")
+                    return expanded
+            except Exception as e:
+                logger.warning(f"OpenAI expansion failed: {str(e)}")
+
+        # If expansion failed, return original content
+        logger.error(f"✗ Content expansion failed. Returning original {word_count}-word content (below {min_words} minimum)")
+        return content
+
     def ensure_internal_links(self, content):
         """Ensure content has minimum 2 internal links, add them if needed"""
         internal_link_count = content.count('[[INTERNAL_LINK')
@@ -708,6 +805,16 @@ Return ONLY the HTML content, no explanations or markdown."""
 
             word_count_initial = len(content.split())
             print(f"  ✓ {GREEN}Content generated via {self.provider_used}: {self.content_length} characters (~{word_count_initial} words){RESET}\n")
+
+            # Step 3b: Enforce minimum content length (800 words)
+            print(f"{BOLD}Step 3b: Enforcing Minimum Content Length (800 words){RESET}")
+            if word_count_initial < 800:
+                logger.warning(f"Content below 800-word minimum ({word_count_initial} words). Attempting expansion...")
+                content = self.expand_content_to_minimum(content, title_data['title'], keywords, title_data['topic'], min_words=800)
+                word_count_expanded = len(content.split())
+                print(f"  ✓ Content expanded: {word_count_initial} → {word_count_expanded} words\n")
+            else:
+                print(f"  ✓ Content meets minimum length requirement ({word_count_initial} words)\n")
 
             # Step 4: Fix HTML tags and inject keywords
             print(f"{BOLD}Step 4: Fixing HTML Tags & Optimizing Keywords{RESET}")
