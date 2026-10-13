@@ -47,10 +47,34 @@ class ImageFinder:
         self.images_found = 0
 
         # Log available APIs
+        logger.info("\n" + "="*70)
+        logger.info("API KEY STATUS CHECK")
+        logger.info("="*70)
+        if self.unsplash_key:
+            logger.info("✓ Unsplash API key configured")
+        else:
+            logger.warning("✗ Unsplash API key MISSING - stock photos unavailable")
+
+        if self.pexels_key:
+            logger.info("✓ Pexels API key configured")
+        else:
+            logger.warning("✗ Pexels API key MISSING - stock photos unavailable")
+
+        if self.pixabay_key:
+            logger.info("✓ Pixabay API key configured")
+        else:
+            logger.warning("✗ Pixabay API key MISSING - stock photos unavailable")
+
         if self.replicate_key:
-            logger.info("✓ Replicate API available for AI image generation")
+            logger.info("✓ Replicate API token configured for AI generation")
+        else:
+            logger.warning("✗ Replicate API token MISSING - AI generation unavailable")
+
         if self.huggingface_key:
-            logger.info("✓ HuggingFace API available for AI image generation")
+            logger.info("✓ HuggingFace API key configured for AI generation")
+        else:
+            logger.warning("✗ HuggingFace API key MISSING - AI generation unavailable")
+        logger.info("="*70 + "\n")
 
     def print_header(self, title):
         print(f"\n{'='*70}\n{BOLD}{title}{RESET}\n{'='*70}")
