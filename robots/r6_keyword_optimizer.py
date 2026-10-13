@@ -85,32 +85,69 @@ class KeywordOptimizer:
         return keyword_count, density
 
     def optimize_content(self, content, keywords):
-        """Optimize content for keywords"""
+        """Optimize content for keywords - aggressive 1%+ density targeting"""
         optimized = content
 
-        # Add keywords to first 100 words if not present
-        words_list = content.split()
-        first_100 = ' '.join(words_list[:100])
+        # Calculate total word count for density calculation
+        words = re.findall(r'\b\w+\b', content.lower())
+        total_words = len(words)
 
-        for keyword in keywords[:3]:
-            if keyword.lower() not in first_100.lower():
-                # Add after first paragraph
-                paragraphs = optimized.split('</p>')
-                if len(paragraphs) > 1:
-                    paragraphs[0] += f" {keyword}</p>"
-                    optimized = '</p>'.join(paragraphs)
+        if total_words == 0:
+            return content
 
-        # Improve headers with keywords
-        for i, keyword in enumerate(keywords[:5]):
-            h2_pattern = rf'<h2>([^<]+)</h2>'
-            matches = re.finditer(h2_pattern, optimized)
-            for match in list(matches):
-                if i == 0:  # Only modify first H2
-                    old_header = match.group(1)
-                    if keyword.lower() not in old_header.lower():
-                        new_header = f"{old_header} ({keyword})"
-                        optimized = optimized.replace(f'<h2>{old_header}</h2>', f'<h2>{new_header}</h2>', 1)
-                    break
+        # Target: 1% density minimum
+        target_density = 0.01
+        target_occurrences_per_keyword = max(3, int(total_words * target_density))  # Minimum 3, or 1%
+
+        logger.info(f"Content has {total_words} words. Target {target_occurrences_per_keyword} occurrences per keyword for 1% density")
+
+        # Process each keyword
+        for keyword in keywords[:5]:  # Process top 5 keywords
+            # Count current occurrences
+            current_count = optimized.lower().count(keyword.lower())
+            needed_count = target_occurrences_per_keyword - current_count
+
+            if needed_count > 0:
+                logger.info(f"Keyword '{keyword}': {current_count} found, need {needed_count} more for {target_density*100}%")
+
+                # Inject keyword into content naturally
+                # Strategy: Add to first paragraph if missing, then distribute throughout body text
+
+                # Try adding to first paragraph
+                if keyword.lower() not in optimized[:500].lower():
+                    paragraphs = optimized.split('</p>')
+                    if len(paragraphs) > 1:
+                        # Add at the end of first paragraph before closing tag
+                        paragraphs[0] = paragraphs[0].rstrip() + f". {keyword} is essential for fitness success.</p>"
+                        optimized = '</p>'.join(paragraphs)
+                        needed_count -= 1
+
+                # Distribute remaining keywords throughout middle paragraphs
+                if needed_count > 0:
+                    paragraphs = optimized.split('</p>')
+                    para_count = len(paragraphs)
+
+                    # Inject into roughly evenly spaced paragraphs
+                    if para_count > 3:
+                        for i in range(1, needed_count + 1):
+                            para_idx = min(i * (para_count // (needed_count + 2)), para_count - 2)
+                            if para_idx < len(paragraphs) and para_idx > 0:
+                                # Add keyword naturally to the paragraph
+                                paragraphs[para_idx] = paragraphs[para_idx].rstrip() + f". {keyword} enhances overall fitness."
+
+                        optimized = '</p>'.join(paragraphs)
+
+        # Enhance headers with first keyword
+        if keywords:
+            keyword = keywords[0]
+            h2_pattern = r'<h2>([^<]+)</h2>'
+            h2_match = re.search(h2_pattern, optimized)
+            if h2_match:
+                old_header = h2_match.group(1)
+                if keyword.lower() not in old_header.lower():
+                    new_header = f"{old_header}: {keyword}"
+                    optimized = optimized.replace(f'<h2>{old_header}</h2>', f'<h2>{new_header}</h2>', 1)
+                    logger.info(f"Updated header with '{keyword}'")
 
         return optimized
 

@@ -396,7 +396,7 @@ Return ONLY the HTML content, no explanations or markdown."""
             return None
 
     def fix_html_tags(self, content):
-        """Fix unbalanced HTML tags in content - aggressive reconstruction"""
+        """Fix unbalanced HTML tags in content - proper reconstruction"""
         import re
 
         # Process tags with focus on <p> which is most problematic
@@ -412,34 +412,36 @@ Return ONLY the HTML content, no explanations or markdown."""
             if opening_count != closing_count:
                 logger.warning(f"Tag mismatch for <{tag}>: {opening_count} opening vs {closing_count} closing")
 
-                # For <p> tags, use aggressive reconstruction
                 if tag == 'p':
-                    # Find all <p> opening tags and their positions
-                    p_opens = [(m.start(), m.end()) for m in re.finditer(opening_pattern, content, re.IGNORECASE)]
-                    p_closes = [(m.start(), m.end()) for m in re.finditer(closing_pattern, content, re.IGNORECASE)]
+                    # For <p> tags, use position-aware reconstruction
+                    if closing_count > opening_count:
+                        # More closing tags than opening - remove excess from the end
+                        excess = closing_count - opening_count
+                        # Find all closing tag positions from the end
+                        for _ in range(excess):
+                            # Find the last occurrence and remove it
+                            last_close = content.rfind(f'</{tag}>')
+                            if last_close != -1:
+                                content = content[:last_close] + content[last_close + len(f'</{tag}>'):]
+                        logger.debug(f"Removed {excess} extra </{tag}> tags")
 
-                    # If more opens than closes, add closes
-                    if len(p_opens) > len(p_closes):
-                        missing = len(p_opens) - len(p_closes)
+                    elif opening_count > closing_count:
+                        # More opening tags than closing - add closing tags at the end
+                        missing = opening_count - closing_count
                         for _ in range(missing):
                             content = content.rstrip() + f'\n</{tag}>'
                         logger.debug(f"Added {missing} missing </{tag}> tags")
-
-                    # If more closes than opens, remove excess
-                    elif len(p_closes) > len(p_opens):
-                        excess = len(p_closes) - len(p_opens)
-                        for _ in range(excess):
-                            content = re.sub(f'</{tag}>$', '', content)
-                            if f'</{tag}>' in content:
-                                content = re.sub(f'</{tag}>', '', content, count=1)
-                        logger.debug(f"Removed {excess} extra </{tag}> tags")
                 else:
                     # For other tags, simple balance
                     if closing_count > opening_count:
-                        for _ in range(closing_count - opening_count):
-                            content = re.sub(f'</{tag}>', '', content, count=1)
+                        excess = closing_count - opening_count
+                        for _ in range(excess):
+                            last_close = content.rfind(f'</{tag}>')
+                            if last_close != -1:
+                                content = content[:last_close] + content[last_close + len(f'</{tag}>'):]
                     elif opening_count > closing_count:
-                        for _ in range(opening_count - closing_count):
+                        missing = opening_count - closing_count
+                        for _ in range(missing):
                             content += f'\n</{tag}>'
 
         return content
