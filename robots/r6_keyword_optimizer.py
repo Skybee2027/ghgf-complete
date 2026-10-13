@@ -95,9 +95,10 @@ class KeywordOptimizer:
         if total_words == 0:
             return content
 
-        # Target: 1.05% density - provides 0.05% safety margin above 1.0% minimum requirement
-        # This ensures measured density stays >= 1.0% even with rounding/calculation variations
-        target_density = 0.0105
+        # Target: 1.2% density - provides 0.2% safety margin above 1.0% minimum requirement
+        # Previous 1.05% target produced 0.95% measured density (below minimum)
+        # New 1.2% target ensures measured density stays >= 1.0% with calculation variations
+        target_density = 0.012
         target_occurrences_per_keyword = max(4, round(total_words * target_density))
 
         logger.info(f"Content has {total_words} words. Target {target_occurrences_per_keyword} occurrences per keyword for {target_density*100}% density")
