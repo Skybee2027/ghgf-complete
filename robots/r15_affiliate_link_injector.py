@@ -82,8 +82,24 @@ class AffiliateLinksInjector:
         """Get affiliate products for this blog from R12"""
         try:
             cursor = conn.cursor(dictionary=True)
+
+            # First, ensure product_url column exists (migration safety)
+            try:
+                alter_query = """
+                    ALTER TABLE affiliate_products
+                    ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000)
+                """
+                cursor.execute(alter_query)
+                conn.commit()
+                logger.debug("Ensured product_url column exists in affiliate_products table")
+            except Exception as e:
+                logger.debug(f"Could not verify/add product_url column: {str(e)}")
+
+            # Query with explicit column selection
             query = """
-                SELECT id, product_name, product_url, description, commission_rate, source_network
+                SELECT id, product_name,
+                       COALESCE(product_url, '') as product_url,
+                       description, commission_rate, source_network
                 FROM affiliate_products
                 WHERE blog_id = %s
                 ORDER BY score DESC
@@ -95,6 +111,7 @@ class AffiliateLinksInjector:
             return results
         except Exception as e:
             logger.error(f"Error getting affiliate products: {str(e)}")
+            logger.error(f"This may be due to missing product_url column. Run: ALTER TABLE affiliate_products ADD COLUMN IF NOT EXISTS product_url VARCHAR(1000);")
             return []
 
     def build_product_cta(self, product, template_type='recommendation'):
