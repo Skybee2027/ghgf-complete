@@ -69,7 +69,8 @@ ADD COLUMN IF NOT EXISTS revalidation_checked_at TIMESTAMP NULL,
 ADD COLUMN IF NOT EXISTS selected_headline_id INT,
 ADD COLUMN IF NOT EXISTS headline_testing_passed BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS headline_tested_at TIMESTAMP NULL,
-ADD COLUMN IF NOT EXISTS headline_test_results TEXT;
+ADD COLUMN IF NOT EXISTS headline_test_results TEXT,
+ADD COLUMN IF NOT EXISTS images_found INT DEFAULT 0;
 
 -- Create indexes for performance
 ALTER TABLE blog_posts
