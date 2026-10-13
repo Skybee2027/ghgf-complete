@@ -160,41 +160,56 @@ class BlogContentGenerator:
         """Generate the shared prompt for all providers"""
         keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
 
-        # Create keyword injection points - emphasize keywords multiple times
-        keyword_injection = "\n".join([f"- '{k['keyword']}' - use 3-4 times throughout the post" for k in keywords[:5]])
+        # Create keyword integration requirements - natural integration, not injection
+        keyword_integration = "\n".join([
+            f"- '{k['keyword']}': Use 2-3 times naturally, integrated into sentences about {topic.lower()}"
+            for k in keywords[:5]
+        ])
 
         prompt = f"""Write a comprehensive, engaging health/fitness blog post with the title: "{title}"
 
-STRUCTURE (MUST follow this format):
-1. Introduction (150-200 words): Hook the reader, explain why this matters, INCLUDE the keywords naturally and prominently
-2. Problem Section (200-250 words): Discuss the main problem/challenge related to the topic, USE keywords to describe the problem
-3. Solution/How-To Section (300-350 words): Provide 3-4 actionable solutions or steps, EMPHASIZE keywords when describing solutions
-4. Benefits Section (150-200 words): Explain the benefits of following this advice, HIGHLIGHT how keywords lead to benefits
-5. Buying Guide Section (150-200 words): Recommend 2-3 types of products/solutions (leave space for [[AFFILIATE_LINK]] placeholders), MENTION keywords in product descriptions
-6. Conclusion (100-150 words): Summarize, call to action, REINFORCE the keywords as key takeaways
+STRUCTURE (MUST follow this exact format):
+1. Introduction (150-200 words): Hook the reader, explain importance, naturally mention keywords in context
+2. Problem Analysis (200-250 words): Discuss the challenge/pain point, integrate keywords when describing the problem
+3. Solution/How-To (300-350 words): Provide 3-4 actionable steps, use keywords when explaining solutions naturally
+4. Benefits (150-200 words): Explain positive outcomes, mention how keyword topics create benefits
+5. Product/Resource Guide (150-200 words): Recommend products with [[AFFILIATE_LINK:specific_product]] placeholders
+6. Conclusion (100-150 words): Summary, call-to-action, mention key topics from keywords
 
-CRITICAL KEYWORD REQUIREMENTS:
-{keyword_injection}
+KEYWORD INTEGRATION RULES (CRITICAL):
+{keyword_integration}
 
-REQUIREMENTS:
-- Total length: 700-1300 words (leaves buffer for R6 keyword optimization, final target: <1500 words)
-- Write in HTML format with proper tags: <h2>, <h3>, <p>, <ul>, <li> - ALL TAGS MUST BE PROPERLY CLOSED
-- CRITICAL: Each keyword MUST appear 3-4 times naturally throughout the post (1% keyword density minimum)
-- Age-appropriate for all ages (avoid overly technical jargon)
-- Medically accurate (include disclaimers like "consult a doctor")
-- MANDATORY: Include MINIMUM 2 internal link placeholders in different sections (e.g., [[INTERNAL_LINK:related_diet_tips]], [[INTERNAL_LINK:workout_routines]])
-- MANDATORY: Include MINIMUM 2 affiliate link placeholders (e.g., [[AFFILIATE_LINK:fitness_supplements]], [[AFFILIATE_LINK:exercise_equipment]])
-- Include practical tips and actionable advice
-- Use short paragraphs (2-3 sentences max)
-- Include at least 2 lists/bullet points
-- Professional, friendly tone
-- ENSURE EVERY OPENING TAG HAS A CLOSING TAG (balanced HTML)
-- VALIDATION CHECK: Count brackets in output - must have [[INTERNAL_LINK and [[AFFILIATE_LINK placeholders
+CRITICAL REQUIREMENTS:
+- Total length: 800-1200 words
+- Format: Semantic HTML with <h1>, <h2>, <h3>, <p>, <ul>, <li> tags - ALL TAGS MUST MATCH (open/close pairs)
+- Natural keyword integration: Keywords should be PART OF SENTENCES, not added mechanically
+- MINIMUM 2 internal links: [[INTERNAL_LINK:topic_name]] in different sections
+- MINIMUM 2 affiliate links: [[AFFILIATE_LINK:product_name]] scattered throughout
+- Professional, conversational tone (8th grade reading level)
+- Short paragraphs (2-3 sentences maximum)
+- At least 2 bulleted lists for readability
+- Include medical disclaimers where relevant
+- Keyword density target: 1.0-1.5% (naturally distributed, not injected)
+
+ANTI-PATTERNS TO AVOID:
+- DO NOT use mechanical connectors like " and keyword and keyword and"
+- DO NOT repeat keywords in unnatural ways
+- DO NOT add keywords to section headers excessively
+- DO NOT create lists that are just keywords
+- DO NOT have visibly mismatched HTML tags
+- DO NOT use placeholder markers incorrectly
+
+EXAMPLE of GOOD keyword integration:
+"When it comes to **health and fitness**, consistency matters more than intensity. Many people pursuing **fitness goals** often make the mistake of..."
+
+EXAMPLE of BAD keyword integration (AVOID):
+"1 and health and fitness and fitness goals and healthy lifestyle. Consistency..."
 
 Topic: {topic}
-Keywords to naturally include (use 3-4 times each): {keywords_str}
+Title: {title}
+Keywords to integrate naturally (2-3 times each throughout): {keywords_str}
 
-Return ONLY the HTML content, no explanations or markdown."""
+Return ONLY the complete HTML blog post. Start with <h1>{title}</h1> and end with </p>. No markdown, no explanations."""
         return prompt
 
     def generate_content_groq(self, title, keywords, topic):

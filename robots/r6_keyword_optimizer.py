@@ -84,85 +84,227 @@ class KeywordOptimizer:
         density = keyword_count / total_words if total_words > 0 else 0
         return keyword_count, density
 
-    def optimize_content(self, content, keywords):
-        """Optimize content for keywords - aggressive 1%+ density targeting"""
-        optimized = content
+    def _extract_text_paragraphs(self, content):
+        """Extract paragraphs while preserving HTML structure
+        Returns list of tuples: (full_html, text_only, is_header)
+        """
+        paragraphs = []
 
-        # Calculate total word count for density calculation
+        # Split by paragraph tags but preserve them
+        p_pattern = r'<p>(.*?)</p>'
+        h2_pattern = r'<h2>(.*?)</h2>'
+
+        # Extract all paragraphs
+        for match in re.finditer(p_pattern, content, re.DOTALL):
+            html = match.group(0)
+            text = match.group(1)
+            # Strip HTML tags from text for analysis
+            text_only = re.sub(r'<[^>]+>', '', text)
+            paragraphs.append({
+                'full_html': html,
+                'text': text_only,
+                'type': 'paragraph',
+                'match_obj': match
+            })
+
+        # Extract headers
+        for match in re.finditer(h2_pattern, content):
+            html = match.group(0)
+            text = match.group(1)
+            paragraphs.append({
+                'full_html': html,
+                'text': text,
+                'type': 'header',
+                'match_obj': match
+            })
+
+        return paragraphs
+
+    def _is_valid_injection_point(self, sentence, keywords_lower):
+        """Check if a sentence is a valid injection point
+        Skip if: already contains all keywords, is a list, too short, has placeholders
+        """
+        # Skip if sentence is too short (< 5 words)
+        sentence_words = sentence.strip().split()
+        if len(sentence_words) < 5:
+            return False
+
+        # Skip if contains multiple keyword instances already (keyword stuffing)
+        keyword_count = sum(1 for kw in keywords_lower if kw in sentence.lower())
+        if keyword_count > 1:
+            return False
+
+        # Skip if contains placeholders
+        if '[[' in sentence or ']]' in sentence:
+            return False
+
+        # Skip if it's a list of items starting with numbers/bullets
+        if re.match(r'^\d+\s*[\.\)]\s', sentence) or re.match(r'^[\*\-]\s', sentence):
+            return False
+
+        return True
+
+    def _inject_keyword_naturally(self, sentence, keyword):
+        """Inject a keyword naturally into a sentence using context-aware placement
+        Strategies:
+        1. If sentence has topical words (about, including, such as), inject there
+        2. Otherwise integrate into relevant clause
+        3. Avoid mechanical " and keyword" patterns
+        """
+        keyword_lower = keyword.lower()
+
+        # Strategy 1: Look for natural connection points (about, including, such as, etc)
+        connection_patterns = [
+            (r'(about\s+)', lambda m: m.group(1) + keyword + ' '),
+            (r'(including\s+)', lambda m: m.group(1) + keyword + ', '),
+            (r'(such as\s+)', lambda m: m.group(1) + keyword + ', '),
+            (r'(like\s+)', lambda m: m.group(1) + keyword + ' and '),
+        ]
+
+        for pattern, replacement in connection_patterns:
+            if re.search(pattern, sentence, re.IGNORECASE):
+                new_sentence = re.sub(pattern, replacement, sentence, count=1, flags=re.IGNORECASE)
+                if new_sentence != sentence:
+                    logger.info(f"    Injected '{keyword}' using connection pattern")
+                    return new_sentence
+
+        # Strategy 2: Integrate into a clause at the end of sentence before period/punctuation
+        # Find the last complete clause/phrase before punctuation
+        match = re.search(r'([^.!?]+)([.!?]?\s*)$', sentence)
+        if match:
+            clause = match.group(1).strip()
+            punctuation = match.group(2)
+
+            # Check if clause is topically related to keyword (contains related words)
+            clause_words = set(word.lower() for word in clause.split() if len(word) > 3)
+            keyword_words = set(word.lower() for word in keyword.split())
+
+            # If keyword is multi-word (e.g., "health fitness"), look for any component
+            if len(keyword.split()) > 1:
+                shared = clause_words & keyword_words
+                if shared:
+                    # Topically related - integrate keyword before period
+                    new_sentence = f"{sentence.rstrip('.!?')}, particularly with {keyword}{punctuation}"
+                    logger.info(f"    Injected '{keyword}' into topical clause")
+                    return new_sentence
+            else:
+                # Single-word keyword - inject if sentence is about related topic
+                # For now, use a conservative insertion
+                new_sentence = f"{sentence.rstrip('.!?')} regarding {keyword}{punctuation}"
+                logger.info(f"    Injected '{keyword}' into sentence")
+                return new_sentence
+
+        # Fallback: return original sentence (don't force bad injection)
+        return sentence
+
+    def optimize_content(self, content, keywords):
+        """Optimize content for keywords with semantic, context-aware insertion
+        Target: 1.0-1.5% keyword density with natural language preservation
+        """
+        if not keywords:
+            return content
+
+        optimized = content
+        keywords_lower = [kw.lower() for kw in keywords]
+
+        # Calculate total word count
         words = re.findall(r'\b\w+\b', content.lower())
         total_words = len(words)
 
         if total_words == 0:
             return content
 
-        # Target: 1.2% density - provides 0.2% safety margin above 1.0% minimum requirement
-        # Previous 1.05% target produced 0.95% measured density (below minimum)
-        # New 1.2% target ensures measured density stays >= 1.0% with calculation variations
-        target_density = 0.012
-        target_occurrences_per_keyword = max(4, round(total_words * target_density))
+        logger.info(f"Content has {total_words} words")
+        logger.info(f"Processing {len(keywords)} keywords for natural integration")
 
-        logger.info(f"Content has {total_words} words. Target {target_occurrences_per_keyword} occurrences per keyword for {target_density*100}% density")
-
-        # Process each keyword
+        # For each keyword, ensure it appears naturally in the content
         for keyword in keywords[:5]:  # Process top 5 keywords
-            # Count current occurrences
-            current_count = optimized.lower().count(keyword.lower())
-            needed_count = target_occurrences_per_keyword - current_count
+            keyword_lower = keyword.lower()
+            current_count = optimized.lower().count(keyword_lower)
 
-            if needed_count > 0:
-                logger.info(f"Keyword '{keyword}': {current_count} found, need {needed_count} more for {target_density*100}%")
+            # Target 1-2 natural occurrences per keyword (not forced mechanical density)
+            # If keyword already in content naturally, don't force more
+            if current_count >= 2:
+                logger.info(f"✓ '{keyword}': already appears {current_count} times (sufficient)")
+                continue
 
-                # OPTIMIZED: Use short inline injections (2-3 words) to minimize word count growth
-                # This prevents the 40% word variance problem while hitting keyword targets
+            logger.info(f"Processing '{keyword}': found {current_count} time(s)")
 
-                short_injections = [
-                    f" and {keyword}",
-                    f", especially {keyword}",
-                    f" with {keyword}",
-                ]
+            # Split content into paragraphs and headers
+            paragraphs = optimized.split('</p>')
+            injected = False
 
-                paragraphs = optimized.split('</p>')
-                para_count = len(paragraphs)
-                remaining = needed_count
-                inject_idx = 0
+            # Skip first paragraph (introduction) and last (conclusion) for injection
+            # Inject into middle content paragraphs
+            for i in range(1, len(paragraphs) - 1):
+                if current_count >= 2:  # Stop after 2 natural occurrences
+                    break
 
-                # Distribute across middle paragraphs (skip first and last)
-                if para_count > 2:
-                    for i in range(1, para_count - 1):
-                        if remaining <= 0:
+                para = paragraphs[i]
+
+                # Skip if this is a header
+                if '<h' in para:
+                    continue
+
+                # Skip if paragraph already has this keyword
+                if keyword_lower in para.lower():
+                    continue
+
+                # Extract text from paragraph (strip HTML tags for analysis)
+                text_match = re.search(r'>([^<]+)<', para)
+                if not text_match:
+                    continue
+
+                para_text = text_match.group(1)
+
+                # Split into sentences
+                sentences = re.split(r'(?<=[.!?])\s+', para_text)
+                if not sentences:
+                    continue
+
+                # Find a valid sentence to inject into
+                for j, sentence in enumerate(sentences):
+                    if not self._is_valid_injection_point(sentence, keywords_lower):
+                        continue
+
+                    # Inject keyword naturally
+                    new_sentence = self._inject_keyword_naturally(sentence, keyword)
+
+                    if new_sentence != sentence:
+                        # Replace sentence in original paragraph HTML
+                        escaped_sentence = re.escape(sentence)
+                        para = re.sub(escaped_sentence, new_sentence, para, count=1)
+                        current_count += 1
+                        injected = True
+
+                        if current_count >= 2:
                             break
 
-                        # Find sentences in this paragraph and inject into them
-                        para = paragraphs[i]
-                        sentences = para.split('. ')
+                paragraphs[i] = para
 
-                        # Inject into middle sentences (avoid first and last)
-                        for j in range(max(0, len(sentences) - 2)):
-                            if remaining <= 0:
-                                break
+            optimized = '</p>'.join(paragraphs)
 
-                            # Add short keyword phrase before the period
-                            injection = short_injections[inject_idx % len(short_injections)]
-                            # Replace period with injection + period
-                            sentences[j] = sentences[j].rstrip() + injection
-                            inject_idx += 1
-                            remaining -= 1
+            if injected:
+                logger.info(f"  ✓ Successfully injected '{keyword}' naturally")
+            else:
+                logger.info(f"  ⚠ Could not find natural injection point for '{keyword}'")
 
-                        paragraphs[i] = '. '.join(sentences)
-
-                optimized = '</p>'.join(paragraphs)
-
-        # Enhance headers with first keyword
+        # Enhance first H2 header with primary keyword if not already present
         if keywords:
-            keyword = keywords[0]
+            primary_keyword = keywords[0]
             h2_pattern = r'<h2>([^<]+)</h2>'
             h2_match = re.search(h2_pattern, optimized)
+
             if h2_match:
                 old_header = h2_match.group(1)
-                if keyword.lower() not in old_header.lower():
-                    new_header = f"{old_header}: {keyword}"
-                    optimized = optimized.replace(f'<h2>{old_header}</h2>', f'<h2>{new_header}</h2>', 1)
-                    logger.info(f"Updated header with '{keyword}'")
+                if primary_keyword.lower() not in old_header.lower():
+                    new_header = f"{old_header}: {primary_keyword}"
+                    optimized = optimized.replace(
+                        f'<h2>{old_header}</h2>',
+                        f'<h2>{new_header}</h2>',
+                        1
+                    )
+                    logger.info(f"Updated header with primary keyword: '{primary_keyword}'")
 
         return optimized
 
