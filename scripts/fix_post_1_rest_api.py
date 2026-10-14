@@ -227,21 +227,35 @@ try:
 
     print(f"✅ Found Post ID {post_id}: {current_words} words")
 
-    # Update post with enhanced content
+    # Update post with enhanced content - use PUT for complete replacement
     print(f"\nUpdating post with enhanced content ({len(ENHANCED_CONTENT.split())} words)...")
+    print(f"   - Removing old content completely")
+    print(f"   - Replacing with clean new content")
 
     update_url = f"{wp_url}/wp-json/wp/v2/posts/{post_id}"
     update_data = {
         "content": ENHANCED_CONTENT,
-        "status": "publish"
+        "status": "publish",
+        "blocks": []  # Clear any block editor content
     }
 
-    response = requests.post(
+    # Use PUT instead of POST for proper replacement
+    response = requests.put(
         update_url,
         json=update_data,
         auth=(wp_user, wp_password),
         timeout=10
     )
+
+    # Fall back to POST if PUT not supported
+    if response.status_code == 405:
+        print("⚠️ PUT not supported, using POST...")
+        response = requests.post(
+            update_url,
+            json=update_data,
+            auth=(wp_user, wp_password),
+            timeout=10
+        )
 
     if response.status_code in [200, 201]:
         new_words = len(ENHANCED_CONTENT.split())
@@ -255,9 +269,22 @@ try:
             updated_post = verify_response.json()
             saved_content = updated_post['content']['rendered']
             saved_words = len(saved_content.split())
+
+            # Check for artifacts in the saved content
+            has_artifacts = '`html' in saved_content or '```' in saved_content or '<code>' in saved_content
+
             print(f"✅ Verified: Post now has {saved_words} words in database")
+
+            if has_artifacts:
+                print(f"⚠️ WARNING: Artifacts detected in saved content!")
+                print(f"   This indicates old content wasn't properly replaced")
+                print(f"   Content may include both old and new sections")
+
             if saved_words >= new_words - 50:  # Allow small variation due to parsing
-                print(f"✅ Post published to WordPress (verified)")
+                if not has_artifacts:
+                    print(f"✅ Post published to WordPress (verified, clean)")
+                else:
+                    print(f"⚠️ Post published but contains artifacts (partial update)")
             else:
                 print(f"⚠️ WARNING: Content in database doesn't match what was sent!")
                 print(f"   Expected ~{new_words} words, found {saved_words}")
