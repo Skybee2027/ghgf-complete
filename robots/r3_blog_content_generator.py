@@ -160,9 +160,9 @@ class BlogContentGenerator:
         """Generate the shared prompt for all providers"""
         keywords_str = ", ".join([f"{k['keyword']}" for k in keywords[:5]])
 
-        # Create keyword integration requirements - natural integration, not injection
+        # Create keyword integration requirements - natural integration with diverse contexts
         keyword_integration = "\n".join([
-            f"- '{k['keyword']}': Use 2-3 times naturally, integrated into sentences about {topic.lower()}"
+            f"- '{k['keyword']}': Use 2-3 times in DIFFERENT contexts/sections (not repetitive)"
             for k in keywords[:5]
         ])
 
@@ -172,12 +172,22 @@ STRUCTURE (MUST follow this exact format):
 1. Introduction (150-200 words): Hook the reader, explain importance, naturally mention keywords in context
 2. Problem Analysis (200-250 words): Discuss the challenge/pain point, integrate keywords when describing the problem
 3. Solution/How-To (300-350 words): Provide 3-4 actionable steps, use keywords when explaining solutions naturally
-4. Benefits (150-200 words): Explain positive outcomes, mention how keyword topics create benefits
+4. Benefits (150-200 words): Explain positive outcomes, show how keywords relate to benefits
 5. Product/Resource Guide (150-200 words): Recommend products with [[AFFILIATE_LINK:specific_product]] placeholders
-6. Conclusion (100-150 words): Summary, call-to-action, mention key topics from keywords
+6. Conclusion (100-150 words): Summary, call-to-action, reference key topics from keywords
 
-KEYWORD INTEGRATION RULES (CRITICAL):
+KEYWORD INTEGRATION - CRITICAL FOR DIVERSITY:
 {keyword_integration}
+
+DIVERSITY RULES - Avoid Repetitive Patterns:
+- Use keywords in DIFFERENT sections (intro, problem, solution, benefits, conclusion)
+- Vary keyword CONTEXT: describe them as problems, solutions, outcomes, prevention, benefits
+- Avoid overusing the SAME CONNECTOR PHRASES - use variety instead
+- DO NOT use "when it comes to" more than ONCE per post
+- DO NOT use "is important" / "is crucial" / "is vital" more than TWICE total
+- DO NOT use "such as" / "including" / "like" more than 3 times total
+- DO NOT repeat the same keyword twice in one sentence or adjacent sentences
+- VARY your sentence structure - mix short and long sentences
 
 CRITICAL REQUIREMENTS:
 - Total length: 800-1200 words
@@ -191,23 +201,31 @@ CRITICAL REQUIREMENTS:
 - Include medical disclaimers where relevant
 - Keyword density target: 1.0-1.5% (naturally distributed, not injected)
 
-ANTI-PATTERNS TO AVOID:
+ANTI-PATTERNS TO AVOID - FILLER PHRASES:
 - DO NOT use mechanical connectors like " and keyword and keyword and"
 - DO NOT repeat keywords in unnatural ways
-- DO NOT add keywords to section headers excessively
+- DO NOT add keywords to section headers
 - DO NOT create lists that are just keywords
 - DO NOT have visibly mismatched HTML tags
 - DO NOT use placeholder markers incorrectly
+- AVOID repetitive phrase patterns (especially generic business language)
 
-EXAMPLE of GOOD keyword integration:
-"When it comes to **health and fitness**, consistency matters more than intensity. Many people pursuing **fitness goals** often make the mistake of..."
+EXAMPLES of GOOD keyword diversity:
+- Intro: "Health and fitness goals start with understanding your baseline."
+- Problem: "Most people overlook how fitness affects their overall health."
+- Solution: "Build a sustainable fitness routine by starting small."
+- Benefits: "When you prioritize health, fitness improvements follow naturally."
+- Conclusion: "Your journey to better health begins with consistent fitness practice."
 
-EXAMPLE of BAD keyword integration (AVOID):
-"1 and health and fitness and fitness goals and healthy lifestyle. Consistency..."
+EXAMPLES of BAD integration (DO NOT DO THIS):
+- "When it comes to health and fitness, health is important, so fitness goals matter."
+- "Health and fitness and health goals and fitness benefits and..."
+- Using "when it comes to" in every section
+- Repeating "is important" or "crucial" 5+ times
 
 Topic: {topic}
 Title: {title}
-Keywords to integrate naturally (2-3 times each throughout): {keywords_str}
+Keywords to integrate naturally (2-3 times each, varied contexts): {keywords_str}
 
 Return ONLY the complete HTML blog post. Start with <h1>{title}</h1> and end with </p>. No markdown, no explanations."""
         return prompt

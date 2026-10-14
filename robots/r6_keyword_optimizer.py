@@ -289,22 +289,9 @@ class KeywordOptimizer:
             else:
                 logger.info(f"  ⚠ Could not find natural injection point for '{keyword}'")
 
-        # Enhance first H2 header with primary keyword if not already present
-        if keywords:
-            primary_keyword = keywords[0]
-            h2_pattern = r'<h2>([^<]+)</h2>'
-            h2_match = re.search(h2_pattern, optimized)
-
-            if h2_match:
-                old_header = h2_match.group(1)
-                if primary_keyword.lower() not in old_header.lower():
-                    new_header = f"{old_header}: {primary_keyword}"
-                    optimized = optimized.replace(
-                        f'<h2>{old_header}</h2>',
-                        f'<h2>{new_header}</h2>',
-                        1
-                    )
-                    logger.info(f"Updated header with primary keyword: '{primary_keyword}'")
+        # NOTE: Headers are left unchanged - they should reflect natural content structure,
+        # not be modified for keyword optimization. Keywords are integrated into body content
+        # through the injection logic above.
 
         return optimized
 
@@ -383,7 +370,7 @@ class KeywordOptimizer:
 
             print(f"{BOLD}Step 3: Optimizing Content{RESET}")
             optimized = self.optimize_content(blog_data['content'], keywords)
-            print(f"  ✓ Keywords added to headers and introduction")
+            print(f"  ✓ Keywords integrated naturally into body content")
 
             # Verify final keyword density
             print(f"\n{BOLD}Step 3a: Verifying Final Keyword Density{RESET}")

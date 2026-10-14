@@ -373,6 +373,85 @@ RESPOND ONLY WITH JSON, NO OTHER TEXT.
         else:
             return RED
 
+    def fact_check_health_claims(self, content, topic):
+        """Fact-check health claims for accuracy"""
+        # Known false/misleading claims and corrections
+        corrections = {
+            'protein window 30 minutes': 'Protein absorption window is 2-3 hours, not 30 minutes',
+            'temperature triggers melatonin': 'Darkness/light triggers melatonin; temperature supports it',
+            '10% monthly deadlift increase': 'Recommend 2-5% monthly increases for safety',
+            'spot reduction': 'Spot reduction of fat is not possible; full-body approach needed',
+            'muscle turns to fat': 'Muscle and fat are different tissues; one does not turn into the other',
+            'carbs after 6': 'Timing matters less than total daily intake; no food curfew needed',
+            'feel the burn': 'Muscle soreness does not indicate effectiveness; proper form matters more',
+        }
+
+        issues = []
+        for claim, correction in corrections.items():
+            if claim.lower() in content.lower():
+                issues.append({
+                    'claim': claim,
+                    'correction': correction,
+                    'severity': 'HIGH'
+                })
+
+        return issues
+
+    def check_medical_disclaimer(self, content, topic):
+        """Ensure health posts include appropriate medical disclaimers"""
+        # Health-related keywords
+        health_keywords = ['health', 'fitness', 'exercise', 'diet', 'nutrition', 'medical',
+                          'weight loss', 'supplement', 'therapy', 'treatment', 'condition']
+
+        # Check if this is a health-related post
+        is_health_post = any(kw in topic.lower() for kw in health_keywords)
+
+        if not is_health_post:
+            return True, []  # Not a health post, no disclaimer needed
+
+        # Required disclaimer phrases (at least one must be present)
+        disclaimer_phrases = [
+            'consult with',
+            'consult your',
+            'talk to your',
+            'speak with',
+            'seek medical',
+            'medical professional',
+            'healthcare provider',
+            'doctor',
+            'physician',
+            'not a substitute',
+            'not medical advice',
+            'always consult',
+        ]
+
+        content_lower = content.lower()
+        has_disclaimer = any(phrase in content_lower for phrase in disclaimer_phrases)
+
+        if not has_disclaimer:
+            return False, ['Health post missing medical disclaimer or professional consultation language']
+
+        return True, []
+
+    def validate_content_quality(self, blog):
+        """Pre-review validation checks"""
+        issues = []
+        warnings = []
+
+        # 1. Fact-check health claims
+        fact_check_issues = self.fact_check_health_claims(blog['content'], blog['topic'])
+        if fact_check_issues:
+            for issue in fact_check_issues:
+                issues.append(f"❌ FACT CHECK: {issue['claim']} → {issue['correction']}")
+
+        # 2. Check medical disclaimer
+        has_disclaimer, disclaimer_issues = self.check_medical_disclaimer(blog['content'], blog['topic'])
+        if not has_disclaimer:
+            for issue in disclaimer_issues:
+                issues.append(f"⚠️  DISCLAIMER: {issue}")
+
+        return issues, warnings
+
     def save_review(self, conn, blog_id, score, review_data):
         """Save review results to database"""
         try:
@@ -418,7 +497,24 @@ RESPOND ONLY WITH JSON, NO OTHER TEXT.
 
         print(f"{GREEN}Found blog post #{blog['id']}: {blog['title']}{RESET}\n")
 
+        # Pre-review validation checks (fact-checking and disclaimers)
+        print(f"{BOLD}Step 1: Pre-Review Validation Checks{RESET}")
+        validation_issues, validation_warnings = self.validate_content_quality(blog)
+
+        if validation_issues:
+            print(f"{RED}Critical Issues Found:{RESET}")
+            for issue in validation_issues:
+                print(f"  {issue}")
+            print()
+
+        if validation_warnings:
+            print(f"{YELLOW}Warnings:{RESET}")
+            for warning in validation_warnings:
+                print(f"  {warning}")
+            print()
+
         # Perform deep review
+        print(f"{BOLD}Step 2: Editorial Quality Review{RESET}")
         score, review_data = self.perform_review(blog)
 
         if score is None:
@@ -431,11 +527,22 @@ RESPOND ONLY WITH JSON, NO OTHER TEXT.
 
         # Determine pass/fail
         PASS_THRESHOLD = 7.0
+        # If validation issues found, lower threshold or fail
+        has_critical_issues = len(validation_issues) > 0
 
         print(f"\n{'='*70}")
-        if score >= PASS_THRESHOLD:
+        if has_critical_issues:
+            print(f"{RED}❌ CONTENT VALIDATION FAILED{RESET}")
+            print(f"Critical issues found:")
+            for issue in validation_issues:
+                print(f"  {issue}")
+            print(f"Please fix these issues before proceeding")
+            result = 1
+        elif score >= PASS_THRESHOLD:
             print(f"{GREEN}✅ EDITORIAL QUALITY PASSED{RESET}")
             print(f"Score {score}/10 exceeds threshold of {PASS_THRESHOLD}/10")
+            if validation_warnings:
+                print(f"Note: {len(validation_warnings)} warning(s) present - please review")
             print(f"Blog is ready for monetization & publishing steps")
             result = 0
         else:
