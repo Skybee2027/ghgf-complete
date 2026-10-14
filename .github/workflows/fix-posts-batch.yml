@@ -1,0 +1,37 @@
+name: Fix Posts Batch (5 per run)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 9 AM UTC
+
+env:
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  GROQ_MODEL: ${{ secrets.GROQ_MODEL || 'openai/gpt-oss-120b' }}
+  DB_HOST: ${{ secrets.DB_HOST }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+
+jobs:
+  fix-batch:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install packages
+      run: pip install groq mysql-connector-python requests -q
+
+    - name: Run batch fix script
+      run: python3 scripts/fix_posts_batch.py
+
+    - name: Publish with R31
+      run: python3 robots/r31_wordpress_uploader_publisher.py 2>&1 | tail -20
+      continue-on-error: true
