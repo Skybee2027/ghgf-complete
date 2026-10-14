@@ -330,11 +330,68 @@ Return ONLY comma-separated keywords (no explanations):"""
             ranked.append({**img, 'score': score})
         return sorted(ranked, key=lambda x: x['score'], reverse=True)
 
-    def save_images(self, conn, images, blog_id, topic):
-        """Save selected images to database"""
+    def embed_images_in_content(self, content, images, title):
+        """Embed selected images into blog content"""
+        if not content or not images:
+            return content
+
+        try:
+            # Create featured image HTML (use first image as featured)
+            featured = images[0]
+            featured_html = f"""
+<div style="text-align: center; margin: 20px 0; border-radius: 8px; overflow: hidden;">
+    <img src="{featured['url']}" alt="{featured['title']}" style="max-width: 100%; height: auto; border-radius: 8px;" />
+    <p style="font-size: 0.9em; color: #666; margin-top: 8px;">Photo by {featured['credit']} ({featured['source']})</p>
+</div>
+
+"""
+
+            # Insert featured image after the first h1 or at the beginning
+            if '<h1>' in content:
+                # Find the end of first h1
+                h1_end = content.find('</h1>') + 5
+                content = content[:h1_end] + featured_html + content[h1_end:]
+            else:
+                # Insert at the beginning
+                content = featured_html + content
+
+            # Add gallery of remaining images at the end (before closing tags if HTML)
+            if len(images) > 1:
+                gallery_html = '<div style="margin-top: 40px; border-top: 2px solid #eee; padding-top: 20px;">'
+                gallery_html += '<h3>Related Images</h3>'
+                gallery_html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;">'
+
+                for img in images[1:]:
+                    gallery_html += f"""
+<div style="border-radius: 8px; overflow: hidden;">
+    <img src="{img['url']}" alt="{img['title']}" style="width: 100%; height: auto; border-radius: 8px;" />
+    <p style="font-size: 0.85em; color: #666; margin-top: 5px;">© {img['credit']} ({img['source']})</p>
+</div>
+"""
+
+                gallery_html += '</div></div>'
+
+                # Add gallery before closing tags
+                if '</body>' in content.lower():
+                    content = content.replace('</body>', gallery_html + '</body>')
+                elif '</html>' in content.lower():
+                    content = content.replace('</html>', gallery_html + '</html>')
+                else:
+                    content += gallery_html
+
+            logger.info(f"✓ Embedded {len(images)} images in blog content")
+            return content
+
+        except Exception as e:
+            logger.error(f"Error embedding images: {str(e)}")
+            return content  # Return original content if embedding fails
+
+    def save_images(self, conn, images, blog_id, topic, post_content):
+        """Save selected images to database AND embed in content"""
         try:
             cursor = conn.cursor()
 
+            # Save image metadata to tracking table
             for img in images:
                 query = """
                     INSERT INTO image_tracking (image_url, topic, used_date, blog_id, expires_date)
@@ -343,16 +400,20 @@ Return ONLY comma-separated keywords (no explanations):"""
                 expires = datetime.now() + timedelta(days=self.repetition_days)
                 cursor.execute(query, (img['url'], topic, blog_id, self.repetition_days))
 
+            # Embed images in content
+            enhanced_content = self.embed_images_in_content(post_content, images, topic)
+
+            # Update blog_posts with both image count AND embedded content
             update_query = """
                 UPDATE blog_posts
-                SET images_found = %s
+                SET images_found = %s, content = %s
                 WHERE id = %s
             """
-            cursor.execute(update_query, (len(images), blog_id))
+            cursor.execute(update_query, (len(images), enhanced_content, blog_id))
 
             conn.commit()
             cursor.close()
-            logger.info(f"Saved {len(images)} images to database")
+            logger.info(f"✓ Saved {len(images)} images to database and embedded in content")
             return True
         except Exception as e:
             logger.error(f"Error saving images: {str(e)}")
@@ -445,11 +506,17 @@ Return ONLY comma-separated keywords (no explanations):"""
                 print(f"  {i}. {img['title'][:60]} ({img['source']}) - Score: {img['score']}")
             print()
 
-            print(f"{BOLD}Step 7: Saving to Database{RESET}")
-            images_saved = self.save_images(conn, selected, post['id'], post['topic'])
+            print(f"{BOLD}Step 7: Embedding Images in Content{RESET}")
+            print(f"  ✓ Creating featured image section")
+            print(f"  ✓ Adding gallery of related images")
+            print(f"  ✓ Generating HTML with alt text and credits\n")
+
+            print(f"{BOLD}Step 8: Saving to Database{RESET}")
+            images_saved = self.save_images(conn, selected, post['id'], post['topic'], post['content'])
 
             if images_saved:
-                print(f"  ✓ {GREEN}Saved {self.images_found} semantic-matched images{RESET}\n")
+                print(f"  ✓ {GREEN}Saved {self.images_found} semantic-matched images{RESET}")
+                print(f"  ✓ {GREEN}Embedded images in blog content{RESET}\n")
             else:
                 print(f"  ⚠️  {YELLOW}Database save issue{RESET}\n")
 
