@@ -288,12 +288,14 @@ jobs:
         echo "Database is now ready with all required tables and data for R2-R3-R31 pipeline."
         echo "Note: R37 and R14b schemas can be loaded later for monetization features."
     
-    # PHASE: R37 RETROFIT FOCUS
-    # Temporarily disabled R1-R31 (new post generation) to focus quality resources on R37
-    # Will resume new post generation after 750+ existing posts are retrofitted (Est: Oct 17)
-    # - name: Run GHGF Pipeline
-    #   run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
-    #   working-directory: ./
+    # PHASE: FULL PIPELINE RESUMED
+    # Re-enabled R1-R31 after critical token fix (max_tokens 500->4000)
+    # Now generating full-length posts with complete content
+
+    - name: Run GHGF Pipeline - Generate & Retrofit & Publish Posts
+      run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
+      working-directory: ./
+      continue-on-error: true
 
     - name: Run R37 - SUPER ADVANCED Content Retrofit Engine (Batch Processing FOCUSED)
       run: python robots/r37_content_retrofit_engine.py 2>&1 | tee r37_output.log
