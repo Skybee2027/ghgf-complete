@@ -288,16 +288,19 @@ jobs:
         echo "Database is now ready with all required tables and data for R2-R3-R31 pipeline."
         echo "Note: R37 and R14b schemas can be loaded later for monetization features."
     
-    - name: Run GHGF Pipeline
-      run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
-      working-directory: ./
+    # PHASE: R37 RETROFIT FOCUS
+    # Temporarily disabled R1-R31 (new post generation) to focus quality resources on R37
+    # Will resume new post generation after 750+ existing posts are retrofitted (Est: Oct 17)
+    # - name: Run GHGF Pipeline
+    #   run: python run_full_pipeline.py 2>&1 | tee pipeline_output.log
+    #   working-directory: ./
 
-    - name: Run R37 - SUPER ADVANCED Content Retrofit Engine (Batch Processing)
+    - name: Run R37 - SUPER ADVANCED Content Retrofit Engine (Batch Processing FOCUSED)
       run: python robots/r37_content_retrofit_engine.py 2>&1 | tee r37_output.log
       working-directory: ./
       continue-on-error: true
 
-    - name: Verify blog post was created
+    - name: Verify R37 Retrofit Progress
       run: |
         python3 << 'PYEOF'
         import os
@@ -314,34 +317,30 @@ jobs:
             conn = mysql.connector.connect(**db_config)
             cursor = conn.cursor(dictionary=True)
 
-            # Check for recent blog posts
+            # Check R37 retrofit progress
             cursor.execute("""
-                SELECT id, title, status, wordpress_post_id, created_at
-                FROM blog_posts
-                ORDER BY created_at DESC
-                LIMIT 3
+                SELECT COUNT(*) as total_posts FROM blog_posts WHERE status = 'published'
             """)
-            posts = cursor.fetchall()
+            total = cursor.fetchone()['total_posts']
+
+            cursor.execute("""
+                SELECT COUNT(*) as retrofitted FROM retrofit_log WHERE status = 'completed'
+            """)
+            retrofitted = cursor.fetchone()['retrofitted']
 
             print("\n" + "="*70)
-            print("RECENT BLOG POSTS IN DATABASE")
+            print("R37 RETROFIT PROGRESS")
             print("="*70)
-
-            if posts:
-                for post in posts:
-                    print(f"ID: {post['id']}")
-                    print(f"  Title: {post['title']}")
-                    print(f"  Status: {post['status']}")
-                    print(f"  WordPress ID: {post['wordpress_post_id']}")
-                    print(f"  Created: {post['created_at']}")
-                    print()
-            else:
-                print("❌ NO BLOG POSTS FOUND IN DATABASE!")
+            print(f"Total Posts in Database: {total}")
+            print(f"Posts Retrofitted: {retrofitted}")
+            print(f"Remaining: {total - retrofitted}")
+            print(f"Progress: {round((retrofitted/total*100) if total > 0 else 0, 1)}%")
+            print("="*70)
 
             cursor.close()
             conn.close()
         except Exception as e:
-            print(f"❌ Error checking database: {str(e)}")
+            print(f"⚠️  Database query skipped: {str(e)}")
         PYEOF
 
     - name: Upload error logs
