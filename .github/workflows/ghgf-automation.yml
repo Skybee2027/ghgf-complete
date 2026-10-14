@@ -2,8 +2,9 @@ name: GHGF 42-Robot Autonomous Blogging Pipeline
 
 on:
   # schedule:
-  #   - cron: '0 */6 * * *'  # Run every 6 hours (PAUSED - step-by-step fix in progress)
-  workflow_dispatch:  # Allow manual trigger
+  #   - cron: '0 */6 * * *'  # Run every 6 hours (PAUSED - fixing existing blogs)
+  # workflow_dispatch:  # DISABLED - Blog quality fixes in progress (1 blog/day cleanup)
+  # No automated triggers - manual resume only after blog cleanup complete
 
 env:
   # Database Configuration
