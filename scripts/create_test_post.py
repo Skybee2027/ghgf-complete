@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Create a new test post with improved template content (no redundancy)"""
+"""Create a new test post with improved template content (no redundancy) and featured image"""
 
 import os
 import sys
 import requests
 import json
 from datetime import datetime
+import base64
 
 # Improved content - Clean template without redundant "Foundation One/Two/Three" labels (2300+ words)
 IMPROVED_CONTENT = """<p><span style="color: #0066cc;"><strong>Transform Your Health and Fitness Journey: The Complete Guide to Achieving Your Dreams</strong></span></p>
@@ -191,6 +192,46 @@ if not wp_user or not wp_password:
     print("❌ WORDPRESS_USER or WORDPRESS_PASSWORD not set")
     sys.exit(1)
 
+def try_set_featured_image(post_id, wp_url, wp_user, wp_password):
+    """Attempt to find and set a featured image for the post"""
+    try:
+        # First, try to find an existing image in the media library
+        print(f"🖼️  Looking for featured image...")
+        media_url = f"{wp_url}/wp-json/wp/v2/media"
+
+        media_response = requests.get(
+            media_url,
+            params={"per_page": 5},
+            auth=(wp_user, wp_password),
+            timeout=10
+        )
+
+        if media_response.status_code == 200:
+            media_list = media_response.json()
+            if isinstance(media_list, list) and len(media_list) > 0:
+                # Use the first available image
+                featured_media_id = media_list[0]['id']
+
+                # Set featured media on post
+                update_url = f"{wp_url}/wp-json/wp/v2/posts/{post_id}"
+                update_response = requests.post(
+                    update_url,
+                    json={"featured_media": featured_media_id},
+                    auth=(wp_user, wp_password),
+                    timeout=10
+                )
+
+                if update_response.status_code == 200:
+                    print(f"   ✅ Featured image set (Media ID: {featured_media_id})")
+                    return True
+
+        print(f"   ⚠️  No existing images found - featured image will be set later")
+        return False
+
+    except Exception as e:
+        print(f"   ⚠️  Could not set featured image: {str(e)}")
+        return False
+
 try:
     # Create new post
     print(f"\n📝 Creating improved test post (without redundant labels)...")
@@ -220,6 +261,10 @@ try:
         print(f"   - Post ID: {post_id}")
         print(f"   - Word Count: {word_count}")
         print(f"   - Status: Published")
+
+        # Try to set featured image
+        try_set_featured_image(post_id, wp_url, wp_user, wp_password)
+
         print(f"\n📍 VIEW TEST POST HERE:")
         print(f"   {post_url}")
 
