@@ -300,6 +300,11 @@ jobs:
       working-directory: ./
       continue-on-error: true
 
+    - name: Run R31 - WordPress Publisher (Publishing retrofitted posts)
+      run: python robots/r31_wordpress_uploader_publisher.py 2>&1 | tee r31_output.log
+      working-directory: ./
+      continue-on-error: true
+
     - name: Verify R37 Retrofit Progress
       run: |
         python3 << 'PYEOF'
