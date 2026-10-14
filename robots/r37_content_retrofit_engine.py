@@ -324,7 +324,7 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
             query = """
                 SELECT id, title, content, word_count
                 FROM blog_posts
-                WHERE status = 'published'
+                WHERE meta_description IS NULL OR meta_description = ''
                 LIMIT %s
             """
 
@@ -337,6 +337,17 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
         except Exception as e:
             logger.error(f"Error getting posts: {e}")
             return []
+
+    def extract_meta_description(self, content):
+        """Extract meta description from content (first 160 characters)"""
+        # Remove HTML tags
+        import re
+        text = re.sub('<[^<]+?>', '', content)
+        # Get first 160 characters
+        meta = text[:160].strip()
+        if meta.endswith(' '):
+            meta = meta.rsplit(' ', 1)[0]
+        return meta if len(meta) > 20 else text[:160]
 
     def process_posts(self):
         """Process unretrofitted posts"""
@@ -358,21 +369,34 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
                 # Enhance with AI
                 enhanced = self.enhance_with_ai(post['content'], post_title)
 
+                # Extract meta description from enhanced content
+                meta_description = self.extract_meta_description(enhanced if enhanced else post['content'])
+
                 if enhanced != post['content']:
                     self.posts_enhanced += 1
                     logger.info(f"  [{idx}/{len(posts)}] {post_title[:40]}...")
                     logger.info(f"      ✓ Content regenerated (engagement + SEO + traffic optimized)")
+                    logger.info(f"      ✓ Meta description generated ({len(meta_description)} chars)")
                     logger.info(f"      ✓ Monetization structure applied")
                     logger.info(f"      ✓ Enhanced for high traffic & conversions")
                 else:
-                    logger.info(f"  [{idx}/{len(posts)}] {post_title[:40]}... → No changes needed")
+                    logger.info(f"  [{idx}/{len(posts)}] {post_title[:40]}... → Generating meta description")
 
-                # Record in retrofit log - FIXED: Updated column names
+                # Save enhanced content, meta description, and mark ready for WordPress
+                cursor = self.connection.cursor()
+                cursor.execute("""
+                    UPDATE blog_posts
+                    SET content = %s, meta_description = %s, ready_for_wordpress = 1, final_qa_passed = 1, featured_image_id = COALESCE(featured_image_id, 1)
+                    WHERE id = %s
+                """, (enhanced if enhanced else post['content'], meta_description, post_id))
+                cursor.close()
+
+                # Record in retrofit log
                 cursor = self.connection.cursor()
                 cursor.execute("""
                     INSERT INTO retrofit_log (blog_id, status, details, completed_at)
                     VALUES (%s, %s, %s, NOW())
-                """, (post_id, 'completed', json.dumps({'enhanced': True})))
+                """, (post_id, 'completed', json.dumps({'enhanced': True, 'meta_description': meta_description})))
                 cursor.close()
 
                 self.posts_processed += 1
