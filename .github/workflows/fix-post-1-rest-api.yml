@@ -1,0 +1,33 @@
+name: Fix Post 1 - WordPress REST API
+
+on:
+  workflow_dispatch:
+
+env:
+  WORDPRESS_URL: https://greathealthgreatfitness.com
+  WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+  WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
+jobs:
+  fix-post:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install packages
+      run: pip install requests -q
+
+    - name: Fix Post 1 via WordPress REST API
+      run: python3 scripts/fix_post_1_rest_api.py
+
+    - name: Verify on WordPress
+      run: |
+        echo "✅ Post 1 enhanced and published"
+        echo "Verify at: https://greathealthgreatfitness.com/index.php/2026/10/14/5-complete-steps-to-achieve-your-health-and-fitness-dreams/"
