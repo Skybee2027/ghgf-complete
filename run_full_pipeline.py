@@ -27,6 +27,9 @@ PIPELINE = [
     ('r2_blog_title_generator.py', 'R2: Blog Title Generator'),
     ('r3_blog_content_generator.py', 'R3: Blog Content Generator'),
 
+    # Content Cleaning & Validation (R3.5)
+    ('r3_5_content_cleaner.py', 'R3.5: Intelligent Content Cleaner'),
+
     # Quality & Safety Checks (R4-R5)
     ('r4_plagiarism_checker.py', 'R4: Plagiarism Checker'),
     ('r5_ai_detection_filter.py', 'R5: AI Detection Filter'),
