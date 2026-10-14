@@ -241,7 +241,7 @@ try:
         "title": "Transform Your Health and Fitness: The Complete 5-Step Framework",
         "content": IMPROVED_CONTENT,
         "status": "publish",
-        "slug": "health-fitness-5-step-framework-2026"
+        "slug": "complete-health-fitness-framework-2026"
     }
 
     response = requests.post(

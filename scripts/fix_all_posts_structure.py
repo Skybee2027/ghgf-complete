@@ -230,13 +230,20 @@ try:
         updated_count = 0
         for post in posts:
             post_id = post['id']
-            post_title = post['title'].get('rendered', 'Unknown')[:50]
+            post_title = post['title'].get('rendered', 'Unknown')
 
-            print(f"\n   📝 Updating Post {post_id}: {post_title}...")
+            # Clean up title - remove TEST: prefix and (Fresh Post Test) suffix
+            if "TEST:" in post_title or "(Fresh Post Test)" in post_title:
+                clean_title = "Transform Your Health and Fitness: The Complete 5-Step Framework"
+            else:
+                clean_title = post_title[:50]
+
+            print(f"\n   📝 Updating Post {post_id}: {clean_title}...")
 
             update_url = f"{wp_url}/wp-json/wp/v2/posts/{post_id}"
 
             update_data = {
+                "title": clean_title,
                 "content": IMPROVED_CONTENT,
                 "status": "publish"
             }
