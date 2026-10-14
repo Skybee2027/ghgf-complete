@@ -263,6 +263,18 @@ Return ONLY the enhanced HTML content."""
             logger.warning(f"OpenAI failed: {error_msg[:100]}")
             return None
 
+    def clean_markdown_artifacts(self, content):
+        """Remove markdown code fence artifacts that AI sometimes adds"""
+        import re
+        # Remove markdown code fences (```html ... ```)
+        content = re.sub(r'```html\s*', '', content)
+        content = re.sub(r'```\s*', '', content)
+        # Remove backtick artifacts like "`html or "`
+        content = content.replace('"`html', '').replace('"`', '')
+        # Remove trailing/leading whitespace
+        content = content.strip()
+        return content
+
     def enhance_with_ai(self, content, title):
         """Multi-provider fallback enhancement with strategic delays"""
         logger.info("\n" + "="*80)
@@ -279,8 +291,11 @@ Return ONLY the enhanced HTML content."""
         for i, (name, provider_func) in enumerate(providers):
             enhanced = provider_func(content, title)
             if enhanced:
+                # Clean markdown artifacts before returning
+                enhanced = self.clean_markdown_artifacts(enhanced)
                 logger.info("="*80)
-                logger.info(f"SUCCESS: {name} provider succeeded on first try!")
+                logger.info(f"SUCCESS: {name} provider succeeded!")
+                logger.info(f"Content length after cleaning: {len(enhanced)} chars")
                 logger.info("="*80 + "\n")
                 return enhanced
 
