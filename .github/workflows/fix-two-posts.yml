@@ -38,8 +38,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install groq google-generativeai cohere openai mysql-connector-python requests
 
-    - name: Run Quality Fix - 2 Target Posts
-      run: python fix_two_posts.py 2>&1 | tee fix_output.log
+    - name: Run Quality Fix - 2 Target Posts (REST API)
+      run: python fix_posts_rest_api.py 2>&1 | tee fix_output.log
       working-directory: ./
 
     - name: Run R31 - Re-publish Fixed Posts to WordPress
