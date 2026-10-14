@@ -6,12 +6,10 @@ on:
     - cron: '0 9 * * *'  # Daily at 9 AM UTC
 
 env:
-  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-  GROQ_MODEL: ${{ secrets.GROQ_MODEL || 'openai/gpt-oss-120b' }}
-  DB_HOST: ${{ secrets.DB_HOST }}
-  DB_USER: ${{ secrets.DB_USER }}
-  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-  DB_NAME: ${{ secrets.DB_NAME }}
+  WORDPRESS_URL: https://greathealthgreatfitness.com
+  WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+  WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 jobs:
   fix-batch:
@@ -27,11 +25,7 @@ jobs:
         python-version: '3.11'
 
     - name: Install packages
-      run: pip install groq mysql-connector-python requests -q
+      run: pip install requests anthropic -q
 
-    - name: Run batch fix script
-      run: python3 scripts/fix_posts_batch.py
-
-    - name: Publish with R31
-      run: python3 robots/r31_wordpress_uploader_publisher.py 2>&1 | tail -20
-      continue-on-error: true
+    - name: Run batch fix script (REST API)
+      run: python3 scripts/fix_posts_batch_rest_api.py
