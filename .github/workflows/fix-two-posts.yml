@@ -1,0 +1,59 @@
+name: Fix Quality - 2 Target Posts
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+env:
+  DB_HOST: ${{ secrets.DB_HOST }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+  GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+  COHERE_MODEL: ${{ secrets.COHERE_MODEL }}
+  OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+  WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+  WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+  WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
+jobs:
+  fix-posts:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        apt-get update && apt-get install -y mysql-client
+        python -m pip install --upgrade pip
+        pip install groq google-generativeai cohere openai mysql-connector-python requests
+
+    - name: Run Quality Fix - 2 Target Posts
+      run: python fix_two_posts.py 2>&1 | tee fix_output.log
+      working-directory: ./
+
+    - name: Run R31 - Re-publish Fixed Posts to WordPress
+      run: python robots/r31_wordpress_uploader_publisher.py 2>&1 | tee r31_fix_output.log
+      working-directory: ./
+      continue-on-error: true
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: post-fix-logs
+        path: |
+          fix_output.log
+          r31_fix_output.log
+        retention-days: 30
+      continue-on-error: true
