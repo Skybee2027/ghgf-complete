@@ -297,6 +297,69 @@ jobs:
       working-directory: ./
       continue-on-error: true
 
+    - name: Explicit Publish - NEW Generated Blog Posts to WordPress
+      run: |
+        python3 << 'PYEOF'
+        import os
+        import mysql.connector
+        import subprocess
+
+        db_config = {
+            'host': os.getenv('DB_HOST'),
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD'),
+            'database': os.getenv('DB_NAME')
+        }
+
+        try:
+            conn = mysql.connector.connect(**db_config)
+            cursor = conn.cursor(dictionary=True)
+
+            # Find newly generated posts that haven't been published
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM blog_posts
+                WHERE status IN ('draft', 'pending', 'new')
+                AND post_date = CURDATE()
+            """)
+            new_posts = cursor.fetchone()['count']
+
+            print(f"\n{'='*70}")
+            print(f"NEWLY GENERATED POSTS FOUND: {new_posts}")
+            print(f"{'='*70}")
+
+            if new_posts > 0:
+                print(f"\n✅ Found {new_posts} new posts to publish")
+                print("Running R31 WordPress Publisher now...")
+
+                # Run R31 to publish new posts
+                result = subprocess.run(
+                    ['python', 'robots/r31_wordpress_uploader_publisher.py'],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+
+                if result.returncode == 0:
+                    print("✅ R31 Successfully published new posts to WordPress!")
+                    if result.stdout:
+                        print("\nPublish Summary:")
+                        for line in result.stdout.split('\n')[-10:]:
+                            if line.strip():
+                                print(f"  {line}")
+                else:
+                    print("⚠️  R31 encountered issues:")
+                    if result.stderr:
+                        print(result.stderr[-500:])
+            else:
+                print("ℹ️  No new posts found to publish")
+
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"⚠️  Could not verify new posts: {str(e)}")
+        PYEOF
+      continue-on-error: true
+
     - name: Run R37 - SUPER ADVANCED Content Retrofit Engine (Batch Processing FOCUSED)
       run: python robots/r37_content_retrofit_engine.py 2>&1 | tee r37_output.log
       working-directory: ./
