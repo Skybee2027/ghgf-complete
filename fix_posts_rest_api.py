@@ -14,8 +14,10 @@ import logging
 import json
 import requests
 import base64
+import time
 from datetime import datetime
 from html.parser import HTMLParser
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -179,105 +181,179 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
 ✓ Monetization-ready with natural product placement"""
         return prompt
 
-    def enhance_with_groq(self, content, title):
-        """Enhance content using Groq"""
+    def enhance_with_groq(self, content, title, retry_count=0, max_retries=2):
+        """Enhance content using Groq with retry logic"""
         if not self.groq_key:
             return None
         try:
             from groq import Groq
-            logger.debug("Attempting Groq provider...")
+            logger.info(f"Attempting Groq provider (attempt {retry_count + 1}/{max_retries + 1})...")
             client = Groq(api_key=self.groq_key)
             prompt = self.get_enhancement_prompt(content, title)
+
             response = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=4000,  # CRITICAL FIX: Increased from 500
-                temperature=0.7
+                max_tokens=4000,
+                temperature=0.7,
+                timeout=60
             )
             if response.choices and response.choices[0].message.content:
                 self.provider_used = "Groq"
+                logger.info("✓ Groq succeeded")
                 return response.choices[0].message.content.strip()
             return None
+        except requests.exceptions.Timeout as e:
+            logger.warning(f"Groq timeout (attempt {retry_count + 1}): {e}")
+            if retry_count < max_retries:
+                wait_time = 5 * (2 ** retry_count)  # Exponential backoff: 5, 10, 20 seconds
+                logger.info(f"Retrying Groq in {wait_time}s...")
+                time.sleep(wait_time)
+                return self.enhance_with_groq(content, title, retry_count + 1, max_retries)
+            return None
+        except requests.exceptions.HTTPError as e:
+            if hasattr(e.response, 'status_code') and e.response.status_code == 429:
+                # Rate limited - wait and retry
+                logger.warning(f"Groq rate limited (attempt {retry_count + 1})")
+                if retry_count < max_retries:
+                    wait_time = 10 * (2 ** retry_count)
+                    logger.info(f"Rate limited. Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                    return self.enhance_with_groq(content, title, retry_count + 1, max_retries)
+            logger.warning(f"Groq HTTP error: {e}")
+            return None
         except Exception as e:
-            logger.debug(f"Groq failed: {e}")
+            logger.warning(f"Groq failed: {str(e)[:100]}")
             return None
 
-    def enhance_with_gemini(self, content, title):
-        """Enhance content using Gemini"""
+    def enhance_with_gemini(self, content, title, retry_count=0, max_retries=2):
+        """Enhance content using Gemini with retry logic"""
         if not self.gemini_key:
             return None
         try:
             import google.generativeai as genai
-            logger.debug("Attempting Gemini provider...")
+            logger.info(f"Attempting Gemini provider (attempt {retry_count + 1}/{max_retries + 1})...")
             genai.configure(api_key=self.gemini_key)
             prompt = self.get_enhancement_prompt(content, title)
-            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-pro")
-            response = model.generate_content(prompt)
-            if response.text:
+            model = genai.GenerativeModel(self.gemini_model if self.gemini_model else "gemini-1.5-pro")
+
+            response = model.generate_content(prompt, request_options={"timeout": 60})
+            if response and response.text:
                 self.provider_used = "Gemini"
+                logger.info("✓ Gemini succeeded")
                 return response.text.strip()
+            logger.warning("Gemini returned empty response")
             return None
         except Exception as e:
-            logger.debug(f"Gemini failed: {e}")
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower():
+                logger.warning(f"Gemini rate limited (attempt {retry_count + 1})")
+                if retry_count < max_retries:
+                    wait_time = 10 * (2 ** retry_count)
+                    logger.info(f"Rate limited. Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                    return self.enhance_with_gemini(content, title, retry_count + 1, max_retries)
+            logger.warning(f"Gemini failed: {error_msg[:100]}")
             return None
 
-    def enhance_with_cohere(self, content, title):
-        """Enhance content using Cohere"""
+    def enhance_with_cohere(self, content, title, retry_count=0, max_retries=2):
+        """Enhance content using Cohere with retry logic"""
         if not self.cohere_key:
             return None
         try:
             import cohere
-            logger.debug("Attempting Cohere provider...")
-            client = cohere.ClientV2(api_key=self.cohere_key)
+            logger.info(f"Attempting Cohere provider (attempt {retry_count + 1}/{max_retries + 1})...")
+            client = cohere.ClientV2(api_key=self.cohere_key, timeout=60)
             prompt = self.get_enhancement_prompt(content, title)
             response = client.chat(
                 model=self.cohere_model if self.cohere_model else "command-r-plus",
                 messages=[{"role": "user", "content": prompt}]
             )
-            if response.message.content:
+            if response and response.message and response.message.content:
                 self.provider_used = "Cohere"
+                logger.info("✓ Cohere succeeded")
                 return response.message.content[0].text.strip()
+            logger.warning("Cohere returned empty response")
             return None
         except Exception as e:
-            logger.debug(f"Cohere failed: {e}")
+            error_msg = str(e)
+            if "429" in error_msg or "rate" in error_msg.lower():
+                logger.warning(f"Cohere rate limited (attempt {retry_count + 1})")
+                if retry_count < max_retries:
+                    wait_time = 10 * (2 ** retry_count)
+                    logger.info(f"Rate limited. Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                    return self.enhance_with_cohere(content, title, retry_count + 1, max_retries)
+            elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                logger.error(f"Cohere authentication failed: Invalid API key")
+            logger.warning(f"Cohere failed: {error_msg[:100]}")
             return None
 
-    def enhance_with_openai(self, content, title):
-        """Enhance content using OpenAI"""
+    def enhance_with_openai(self, content, title, retry_count=0, max_retries=2):
+        """Enhance content using OpenAI with retry logic"""
         if not self.openai_key:
             return None
         try:
             from openai import OpenAI
-            logger.debug("Attempting OpenAI provider...")
-            client = OpenAI(api_key=self.openai_key)
+            logger.info(f"Attempting OpenAI provider (attempt {retry_count + 1}/{max_retries + 1})...")
+            client = OpenAI(api_key=self.openai_key, timeout=60)
             prompt = self.get_enhancement_prompt(content, title)
             response = client.chat.completions.create(
-                model=self.openai_model if self.openai_model else "gpt-4",
+                model=self.openai_model if self.openai_model else "gpt-4-turbo",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=4000,
                 temperature=0.7
             )
             if response.choices and response.choices[0].message.content:
                 self.provider_used = "OpenAI"
+                logger.info("✓ OpenAI succeeded")
                 return response.choices[0].message.content.strip()
             return None
         except Exception as e:
-            logger.debug(f"OpenAI failed: {e}")
+            error_msg = str(e)
+            if "429" in error_msg or "rate" in error_msg.lower():
+                logger.warning(f"OpenAI rate limited (attempt {retry_count + 1})")
+                if retry_count < max_retries:
+                    wait_time = 10 * (2 ** retry_count)
+                    logger.info(f"Rate limited. Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                    return self.enhance_with_openai(content, title, retry_count + 1, max_retries)
+            elif "401" in error_msg or "403" in error_msg or "unauthorized" in error_msg.lower():
+                logger.error(f"OpenAI authentication failed: {error_msg[:50]}")
+            logger.warning(f"OpenAI failed: {error_msg[:100]}")
             return None
 
     def enhance_with_ai(self, content, title):
-        """Multi-provider fallback enhancement"""
-        enhanced = self.enhance_with_groq(content, title)
-        if not enhanced:
-            enhanced = self.enhance_with_gemini(content, title)
-        if not enhanced:
-            enhanced = self.enhance_with_cohere(content, title)
-        if not enhanced:
-            enhanced = self.enhance_with_openai(content, title)
-        if not enhanced:
-            logger.warning("All providers failed")
-            return content
-        return enhanced
+        """Multi-provider fallback enhancement with strategic delays"""
+        logger.info("\n" + "="*80)
+        logger.info("MULTI-PROVIDER AI ENHANCEMENT ATTEMPT")
+        logger.info("="*80)
+
+        providers = [
+            ("Groq", self.enhance_with_groq),
+            ("Gemini", self.enhance_with_gemini),
+            ("Cohere", self.enhance_with_cohere),
+            ("OpenAI", self.enhance_with_openai)
+        ]
+
+        for i, (name, provider_func) in enumerate(providers):
+            enhanced = provider_func(content, title)
+            if enhanced:
+                logger.info("="*80)
+                logger.info(f"SUCCESS: {name} provider succeeded on first try!")
+                logger.info("="*80 + "\n")
+                return enhanced
+
+            # Add strategic delay between provider attempts to avoid hammering APIs
+            if i < len(providers) - 1:
+                delay = 3 + (i * 2)  # 3, 5, 7 seconds between attempts
+                logger.info(f"Waiting {delay}s before next provider attempt...")
+                time.sleep(delay)
+
+        logger.error("\n" + "="*80)
+        logger.error("ALL PROVIDERS FAILED - Using original content as fallback")
+        logger.error("="*80 + "\n")
+        return content
 
     def extract_meta_description(self, content):
         """Extract meta description from content"""
