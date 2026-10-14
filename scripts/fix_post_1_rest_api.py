@@ -159,14 +159,22 @@ if not wp_user or not wp_password:
     sys.exit(1)
 
 try:
-    # Search for post by title
-    print(f"\nSearching for post: {POST_TITLE}")
-    search_url = f"{wp_url}/wp-json/wp/v2/posts?search={POST_TITLE}&per_page=1"
+    # Search for post by slug (URL slug is most reliable)
+    print(f"\nSearching for post by slug: 5-complete-steps-to-achieve-your-health-and-fitness-dreams")
+    search_url = f"{wp_url}/wp-json/wp/v2/posts?slug=5-complete-steps-to-achieve-your-health-and-fitness-dreams&per_page=1"
 
     response = requests.get(search_url, timeout=10)
     response.raise_for_status()
 
     posts = response.json()
+    if not posts:
+        # Fallback: search by title
+        print("⚠️ Post not found by slug, searching by title...")
+        search_url = f"{wp_url}/wp-json/wp/v2/posts?search={POST_TITLE}&per_page=1"
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+        posts = response.json()
+
     if not posts:
         print("❌ Post not found")
         sys.exit(1)
@@ -198,7 +206,22 @@ try:
         new_words = len(ENHANCED_CONTENT.split())
         improvement = ((new_words - current_words) / current_words * 100) if current_words > 0 else 0
         print(f"✅ Enhanced: {current_words} → {new_words} words (+{improvement:.0f}%)")
-        print(f"✅ Post published to WordPress")
+
+        # Verify the update was saved
+        verify_url = f"{wp_url}/wp-json/wp/v2/posts/{post_id}"
+        verify_response = requests.get(verify_url, timeout=10)
+        if verify_response.status_code == 200:
+            updated_post = verify_response.json()
+            saved_content = updated_post['content']['rendered']
+            saved_words = len(saved_content.split())
+            print(f"✅ Verified: Post now has {saved_words} words in database")
+            if saved_words >= new_words - 50:  # Allow small variation due to parsing
+                print(f"✅ Post published to WordPress (verified)")
+            else:
+                print(f"⚠️ WARNING: Content in database doesn't match what was sent!")
+                print(f"   Expected ~{new_words} words, found {saved_words}")
+        else:
+            print(f"✅ Post published to WordPress")
     else:
         print(f"❌ Update failed: {response.status_code}")
         print(f"Response: {response.text}")
