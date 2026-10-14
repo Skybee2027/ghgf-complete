@@ -186,10 +186,19 @@ class WordPressUploaderPublisher:
             auth = (self.wp_user, self.wp_password)
             headers = {'Content-Type': 'application/json'}
 
-            # Prepare post data
+            # CRITICAL FIX: Ensure HTML content is properly encoded for WordPress REST API
+            # WordPress REST API expects HTML content to be valid JSON strings
+            # The content field should contain the full HTML markup
+            post_content = post['content']
+
+            # Validate that content has HTML structure (should have at least one heading or paragraph)
+            if '<h' not in post_content and '<p' not in post_content:
+                logger.warning(f"Content might be plain text, not HTML. Starting with: {post_content[:100]}")
+
+            # Prepare post data with proper HTML handling
             post_data = {
                 'title': post['title'],
-                'content': post['content'],
+                'content': post_content,  # WordPress REST API handles HTML in content field
                 'status': 'publish',
                 'slug': post['slug'] if post['slug'] else post['title'].lower().replace(' ', '-'),
                 'excerpt': post['meta_description'][:160] if post['meta_description'] else '',

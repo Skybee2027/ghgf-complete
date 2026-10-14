@@ -192,7 +192,7 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
             response = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500,
+                max_tokens=4000,
                 temperature=0.7
             )
 
@@ -250,7 +250,7 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
             response = client.generate(
                 model=self.cohere_model,
                 prompt=prompt,
-                max_tokens=500,
+                max_tokens=4000,
                 temperature=0.7
             )
 
@@ -281,7 +281,7 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
             response = client.chat.completions.create(
                 model=self.openai_model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500,
+                max_tokens=4000,
                 temperature=0.7
             )
 
