@@ -416,6 +416,25 @@ Generate ONLY the alt text, no explanation."""
             logger.error(f"Error setting featured image: {str(e)}")
             return False
 
+    def save_featured_image_alt_text(self, conn, blog_id, image_id, alt_text):
+        """Save featured image alt text directly to blog_posts for R31 to use"""
+        try:
+            cursor = conn.cursor()
+            # Store alt text in blog_posts for easy access by R31
+            query = """
+                UPDATE blog_posts
+                SET featured_image_alt_text = %s
+                WHERE id = %s
+            """
+            cursor.execute(query, (alt_text, blog_id))
+            conn.commit()
+            cursor.close()
+            logger.info(f"Featured image alt text saved for blog_id {blog_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving featured image alt text: {str(e)}")
+            return False
+
     def run(self):
         self.print_header("R8: ALT-TEXT GENERATOR & OPTIMIZER")
         print(f"Execution: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -479,13 +498,21 @@ Generate ONLY the alt text, no explanation."""
 
             print(f"{BOLD}Step 6: Setting Featured Image (Unique per Post){RESET}")
             # Select a UNIQUE image not already used by other posts
+            featured_alt_text = None
             if images:
                 selected_image = self.select_unique_featured_image(conn, images, blog_data['id'])
                 if selected_image:
                     featured_set = self.set_featured_image(conn, blog_data['id'], selected_image['id'])
+                    # Get the alt text for this featured image
+                    if selected_image.get('alt_text'):
+                        featured_alt_text = selected_image['alt_text']
+                        # Save alt text to blog_posts for R31
+                        self.save_featured_image_alt_text(conn, blog_data['id'], selected_image['id'], featured_alt_text)
                     if featured_set:
                         print(f"  ✓ Featured image set: Image ID {BLUE}{selected_image['id']}{RESET}")
                         print(f"    URL: {selected_image['image_url'][:60]}...")
+                        if featured_alt_text:
+                            print(f"    Alt Text: {featured_alt_text[:50]}...")
                         print(f"    (Unique: Not used by other posts)\n")
                     else:
                         print(f"  {RED}✗ Failed to set featured image{RESET}\n")

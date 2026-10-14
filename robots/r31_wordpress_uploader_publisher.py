@@ -23,6 +23,7 @@ from datetime import datetime
 import logging
 import json
 import base64
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -243,6 +244,38 @@ class WordPressUploaderPublisher:
             print(f"      {RED}EXCEPTION: {error_msg}{RESET}")
             return None
 
+    def validate_before_publishing(self, post):
+        """CRITICAL: Run pre-flight validation checks before publishing"""
+        issues = []
+
+        # Check 1: No unresolved placeholders
+        if re.search(r'\[\[', post['content']):
+            placeholders = re.findall(r'\[\[[^\]]+\]\]', post['content'])
+            issues.append(f"CRITICAL: Unresolved placeholders: {placeholders}")
+
+        # Check 2: Content is complete (not truncated)
+        if post['content'].endswith('...') and len(post['content'].split('</p>')[-1]) < 30:
+            issues.append("CRITICAL: Content appears truncated")
+
+        # Check 3: Alt text present for featured image (if featured image exists)
+        # This would be checked from the database
+
+        # Check 4: Title/content match (if title has numbers, content should have that many sections)
+        title_number = re.search(r'(\d+)\s+(ways|tips|strategies|steps)', post['title'], re.I)
+        if title_number:
+            expected = int(title_number.group(1))
+            actual = len(re.findall(r'<h2>', post['content']))
+            if expected != actual:
+                issues.append(f"Title says {expected} sections but content has {actual}")
+
+        # Check 5: No site navigation chrome
+        chrome_text = ['Categories', 'Leave a Comment', 'Back to top', 'Exit mobile version']
+        for text in chrome_text:
+            if text in post['content']:
+                issues.append(f"Site navigation found in content: '{text}'")
+
+        return len(issues) == 0, issues
+
     def save_wordpress_post_id(self, conn, blog_id, wordpress_post_id):
         """Save WordPress post ID to database"""
         try:
@@ -339,7 +372,23 @@ class WordPressUploaderPublisher:
 
             print(f"  ✓ Found {len(posts)} posts ready for publishing\n")
 
-            print(f"{BOLD}Step 2: Publishing Posts to WordPress{RESET}")
+            print(f"{BOLD}Step 2: Pre-Flight Validation{RESET}")
+            print(f"  Checking all posts before publishing...\n")
+
+            # Validate all posts before publishing any
+            for post in posts:
+                valid, issues = self.validate_before_publishing(post)
+                if not valid:
+                    print(f"  ✗ BLOCKED: {BLUE}{post['title'][:40]}...{RESET}")
+                    for issue in issues:
+                        print(f"    - {RED}{issue}{RESET}")
+                    self.posts_failed += 1
+                    posts.remove(post)  # Remove invalid posts
+                else:
+                    print(f"  ✓ Valid: {post['title'][:40]}...")
+            print()
+
+            print(f"{BOLD}Step 3: Publishing Posts to WordPress{RESET}")
             for post in posts:
                 print(f"  Publishing: {BLUE}{post['title'][:40]}...{RESET}")
 
@@ -376,7 +425,7 @@ class WordPressUploaderPublisher:
 
             print()
 
-            print(f"{BOLD}Step 3: Updating Publication Status{RESET}")
+            print(f"{BOLD}Step 4: Updating Publication Status{RESET}")
             print(f"  Successfully published: {self.posts_published}")
             print(f"  Failed: {self.posts_failed}\n")
 

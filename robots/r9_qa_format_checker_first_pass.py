@@ -195,6 +195,35 @@ class QAFormatChecker:
 
         return True, [], len(affiliate_links)
 
+    def check_placeholders(self, content):
+        """CRITICAL: Check for unresolved [[...]] placeholders"""
+        # Any remaining placeholder is a FAIL
+        if re.search(r'\[\[', content):
+            placeholders = re.findall(r'\[\[[^\]]+\]\]', content)
+            return False, [f"CRITICAL: Unresolved placeholders found: {placeholders}"]
+        return True, []
+
+    def check_content_complete(self, content):
+        """Check if content is complete (not truncated)"""
+        issues = []
+
+        # Extract just the text without HTML tags
+        text_only = re.sub(r'<[^>]+>', '', content)
+        paragraphs = text_only.split('\n')
+
+        # Check last paragraph isn't truncated (ends with ... or very short)
+        if paragraphs:
+            last_para = paragraphs[-1].strip()
+            if last_para.endswith('...') and len(last_para) < 30:
+                issues.append("Content appears truncated (ends with ...)")
+
+        # Check no sentence ends mid-word
+        if re.search(r'[a-z]{2,}\s*$', text_only):
+            # This might be okay if it ends with a proper sentence
+            pass
+
+        return len(issues) == 0, issues
+
     def check_structure_compliance(self, content):
         """Check if content follows required structure"""
         issues = []
@@ -257,7 +286,40 @@ class QAFormatChecker:
             print(f"  ✓ Blog ID: {BLUE}{blog_data['id']}{RESET}")
             print(f"  ✓ Title: {blog_data['title']}\n")
 
-            print(f"{BOLD}Step 2: HTML Structure Validation{RESET}")
+            print(f"{BOLD}Step 2: CRITICAL - Placeholder Check{RESET}")
+            placeholder_valid, placeholder_issues = self.check_placeholders(blog_data['content'])
+            if placeholder_valid:
+                print(f"  ✓ {GREEN}No unresolved placeholders{RESET}\n")
+                self.passes += 1
+            else:
+                print(f"  ✗ {RED}CRITICAL - PLACEHOLDER ISSUES:{RESET}")
+                for issue in placeholder_issues:
+                    print(f"    - {issue}")
+                    self.issues.append(issue)
+                print()
+                # FAIL immediately on placeholder issues
+                qa_passed = False
+                report = f"FAILED: Unresolved placeholders found"
+                self.save_qa_result(conn, blog_data['id'], qa_passed, report)
+                print(f"{'='*70}")
+                print(f"{BOLD}SUMMARY{RESET}")
+                print(f"  Status: {RED}FAIL - Unresolved placeholders must be resolved before publishing{RESET}")
+                print('='*70 + "\n")
+                return False
+
+            print(f"{BOLD}Step 3: Content Completeness Check{RESET}")
+            complete_valid, complete_issues = self.check_content_complete(blog_data['content'])
+            if complete_valid:
+                print(f"  ✓ {GREEN}Content is complete (not truncated){RESET}\n")
+                self.passes += 1
+            else:
+                print(f"  ✗ {RED}Content completeness issues:{RESET}")
+                for issue in complete_issues:
+                    print(f"    - {issue}")
+                    self.issues.append(issue)
+                print()
+
+            print(f"{BOLD}Step 5: HTML Structure Validation{RESET}")
             html_valid, html_issues = self.check_html_validity(blog_data['content'])
             if html_valid:
                 print(f"  ✓ {GREEN}HTML structure valid{RESET}\n")
@@ -269,7 +331,7 @@ class QAFormatChecker:
                     self.issues.append(issue)
                 print()
 
-            print(f"{BOLD}Step 3: Content Length Check{RESET}")
+            print(f"{BOLD}Step 6: Content Length Check{RESET}")
             length_valid, length_issues = self.check_content_length(blog_data['content'])
             if length_valid:
                 words = len(re.findall(r'\b\w+\b', blog_data['content']))
@@ -282,7 +344,7 @@ class QAFormatChecker:
                     self.issues.append(issue)
                 print()
 
-            print(f"{BOLD}Step 4: Keyword Density Analysis{RESET}")
+            print(f"{BOLD}Step 7: Keyword Density Analysis{RESET}")
             keywords = self.get_blog_keywords(conn, blog_data['topic'])
             kw_valid, kw_issues, kw_passes = self.check_keyword_density(blog_data['content'], keywords)
             if kw_valid:
@@ -295,7 +357,7 @@ class QAFormatChecker:
                     self.warnings.append(issue)
                 print()
 
-            print(f"{BOLD}Step 5: Images & Alt Text Check{RESET}")
+            print(f"{BOLD}Step 8: Images & Alt Text Check{RESET}")
             img_valid, img_issues, img_count = self.check_images_and_alt_text(conn, blog_data['id'])
             if img_valid:
                 print(f"  ✓ {GREEN}All {img_count} images have valid alt text{RESET}\n")
@@ -307,7 +369,7 @@ class QAFormatChecker:
                     self.issues.append(issue)
                 print()
 
-            print(f"{BOLD}Step 6: Internal Links Check{RESET}")
+            print(f"{BOLD}Step 9: Internal Links Check{RESET}")
             intl_valid, intl_issues, intl_count = self.check_internal_links(blog_data['content'])
             if intl_valid:
                 print(f"  ✓ {GREEN}Internal links found: {intl_count}{RESET}\n")
@@ -319,7 +381,7 @@ class QAFormatChecker:
                     self.warnings.append(issue)
                 print()
 
-            print(f"{BOLD}Step 7: Affiliate Links Check{RESET}")
+            print(f"{BOLD}Step 10: Affiliate Links Check{RESET}")
             aff_valid, aff_issues, aff_count = self.check_affiliate_links(blog_data['content'])
             if aff_valid:
                 print(f"  ✓ {GREEN}Affiliate links found: {aff_count}{RESET}\n")
@@ -331,7 +393,7 @@ class QAFormatChecker:
                     self.warnings.append(issue)
                 print()
 
-            print(f"{BOLD}Step 8: Content Structure Compliance{RESET}")
+            print(f"{BOLD}Step 11: Content Structure Compliance{RESET}")
             struct_valid, struct_issues, section_count = self.check_structure_compliance(blog_data['content'])
             if struct_valid:
                 print(f"  ✓ {GREEN}Structure compliant: {section_count} sections found{RESET}\n")
@@ -345,13 +407,13 @@ class QAFormatChecker:
 
             # Determine overall result
             qa_passed = len(self.issues) == 0
-            report = f"Passes: {self.passes}/8 | Issues: {len(self.issues)} | Warnings: {len(self.warnings)}"
+            report = f"Passes: {self.passes}/11 | Issues: {len(self.issues)} | Warnings: {len(self.warnings)}"
             self.save_qa_result(conn, blog_data['id'], qa_passed, report)
 
             print(f"{'='*70}")
             print(f"{BOLD}SUMMARY{RESET}")
             print(f"  Blog ID: {blog_data['id']}")
-            print(f"  Validation Passes: {self.passes}/8")
+            print(f"  Validation Passes: {self.passes}/11")
             print(f"  Critical Issues: {RED}{len(self.issues)}{RESET}")
             print(f"  Warnings: {YELLOW}{len(self.warnings)}{RESET}")
             if qa_passed:

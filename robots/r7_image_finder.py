@@ -106,22 +106,44 @@ class ImageFinder:
             logger.error(f"Error getting topic: {str(e)}")
             return None
 
-    def get_recently_used_images(self, conn, topic):
-        """Get images used in last 90 days for this topic"""
+    def get_recently_used_images(self, conn, topic=None):
+        """Get images used in last 90 days (GLOBALLY, not just by topic)"""
         try:
             cursor = conn.cursor(dictionary=True)
+            # Query ALL recently used images across ALL topics (fix for image duplication)
             query = """
-                SELECT image_url
+                SELECT DISTINCT image_url
                 FROM image_tracking
-                WHERE topic = %s
-                AND used_date > DATE_SUB(CURDATE(), INTERVAL %s DAY)
+                WHERE used_date > DATE_SUB(CURDATE(), INTERVAL %s DAY)
             """
-            cursor.execute(query, (topic, self.repetition_days))
+            cursor.execute(query, (self.repetition_days,))
             results = cursor.fetchall()
             cursor.close()
             return [r['image_url'] for r in results]
         except Exception as e:
             logger.error(f"Error getting recent images: {str(e)}")
+            return []
+
+    def get_recent_post_images(self, conn, num_posts=5):
+        """Get featured images from last N posts (WordPress integration)"""
+        try:
+            cursor = conn.cursor(dictionary=True)
+            # Query WordPress postmeta for featured images from last N posts
+            query = """
+                SELECT DISTINCT featured_image_url
+                FROM blog_posts
+                WHERE status = 'published'
+                AND featured_image_url IS NOT NULL
+                AND featured_image_url != ''
+                ORDER BY published_at DESC
+                LIMIT %s
+            """
+            cursor.execute(query, (num_posts,))
+            results = cursor.fetchall()
+            cursor.close()
+            return [r['featured_image_url'] for r in results if r['featured_image_url']]
+        except Exception as e:
+            logger.warning(f"Could not query recent post images: {str(e)}")
             return []
 
     def search_unsplash(self, query, exclude_urls=None):
@@ -399,14 +421,23 @@ class ImageFinder:
                 return False
             print(f"  ✓ Topic: {BLUE}{topic}{RESET}\n")
 
-            print(f"{BOLD}Step 2: Checking Recently Used Images (90-day rule){RESET}")
-            used_images = self.get_recently_used_images(conn, topic)
-            print(f"  Found {len(used_images)} recently used images - will avoid these\n")
+            print(f"{BOLD}Step 2: Checking Recently Used Images (90-day rule + Last 5 Posts){RESET}")
+            # Get GLOBALLY used images (across all topics) - fix for duplication
+            used_images = self.get_recently_used_images(conn)
+            # Also check recent posts for images
+            recent_post_images = self.get_recent_post_images(conn, 5)
+            # Combine both lists for exclusion
+            all_exclude_urls = list(set(used_images + recent_post_images))
+            print(f"  Found {len(used_images)} recently used images (global)")
+            print(f"  Found {len(recent_post_images)} images from last 5 posts")
+            print(f"  Total to avoid: {len(all_exclude_urls)}")
+            print(f"  Will search for different images\n")
 
             print(f"{BOLD}Step 3: Searching for Images (Unsplash + Pexels + Pixabay + AI Generation){RESET}")
-            unsplash_results = self.search_unsplash(topic, used_images)
-            pexels_results = self.search_pexels(topic, used_images)
-            pixabay_results = self.search_pixabay(topic, used_images)
+            # Use all_exclude_urls to prevent ANY duplicate (global check)
+            unsplash_results = self.search_unsplash(topic, all_exclude_urls)
+            pexels_results = self.search_pexels(topic, all_exclude_urls)
+            pixabay_results = self.search_pixabay(topic, all_exclude_urls)
 
             all_images = unsplash_results + pexels_results + pixabay_results
             print(f"  Found {len(unsplash_results)} from Unsplash")
@@ -416,8 +447,9 @@ class ImageFinder:
             # If we have fewer than 3 images, try AI generation as fallback
             if len(all_images) < 3:
                 print(f"\n  Stock photos below threshold, attempting AI generation...")
-                replicate_results = self.generate_with_replicate(topic, [img['url'] for img in all_images])
-                huggingface_results = self.generate_with_huggingface(topic, [img['url'] for img in all_images])
+                ai_exclude = all_exclude_urls + [img['url'] for img in all_images]
+                replicate_results = self.generate_with_replicate(topic, ai_exclude)
+                huggingface_results = self.generate_with_huggingface(topic, ai_exclude)
                 all_images += replicate_results + huggingface_results
                 if replicate_results:
                     print(f"  Found {len(replicate_results)} from Replicate SDXL")
@@ -427,7 +459,8 @@ class ImageFinder:
             # Last resort: Use Unsplash fallback or placeholder if still no images
             if len(all_images) < 3:
                 print(f"\n  {YELLOW}⚠️  No images from configured APIs - using fallback sources...{RESET}")
-                unsplash_fallback = self.generate_unsplash_direct_images(topic, [img['url'] for img in all_images])
+                fallback_exclude = all_exclude_urls + [img['url'] for img in all_images]
+                unsplash_fallback = self.generate_unsplash_direct_images(topic, fallback_exclude)
                 all_images += unsplash_fallback
                 if unsplash_fallback:
                     print(f"  Found {len(unsplash_fallback)} from Unsplash fallback")
