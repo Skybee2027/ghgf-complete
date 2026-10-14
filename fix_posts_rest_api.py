@@ -99,86 +99,26 @@ class WordPressPostFixer:
         return len(text.split())
 
     def get_enhancement_prompt(self, content, title):
-        """Generate enhancement prompt (same as R37)"""
-        prompt = f"""SUPER ADVANCED CONTENT ENHANCEMENT - Make this HIGHLY ENGAGING, TRAFFIC-OPTIMIZED, and MONETIZATION-READY:
+        """Generate enhancement prompt - simplified for API reliability"""
+        # Truncate content to avoid token limits
+        content_preview = content[:1500] if len(content) > 1500 else content
+
+        prompt = f"""Enhance this blog post to 1500-2000 words. Make it more detailed, engaging, and actionable.
 
 TITLE: {title}
-CONTENT: {content[:2000]}...
+CURRENT CONTENT: {content_preview}
 
-ENHANCEMENT REQUIREMENTS:
+INSTRUCTIONS:
+1. Expand each section with more specific details and examples
+2. Add 3-4 new relevant sections if missing
+3. Include actionable tips and real-world applications
+4. Use conversational, engaging language
+5. Add subheadings to break up content
+6. Format as HTML with <h2>, <p>, <ul>, <ol>, <strong> tags
+7. Target 1500+ words total
+8. Keep tone professional but friendly
 
-1. CONTENT REGENERATION (Not just polish):
-   - Rewrite for maximum clarity and engagement
-   - Add compelling hooks and storytelling elements
-   - Use concrete examples, statistics, real-world scenarios
-   - Make it feel written by an expert, not AI
-   - Add personal insights and unique perspective
-   - Remove fluff, filler phrases, and generic language
-
-2. STRUCTURE & FLOW (Reader-Optimized):
-   - Hook: Compelling opening (question/stat/story) in first 2 sentences
-   - Problem statement: Clear pain point readers face
-   - Solution section: Step-by-step actionable advice
-   - Benefits section: Why this matters (emotional + practical)
-   - Detailed examples: Real-world applications with specifics
-   - Pro tips: Advanced insights readers won't find elsewhere
-   - Call-to-action: Natural integration (NO SALES-Y tone)
-   - Summary: Key takeaways in bullet points
-
-3. ENGAGEMENT OPTIMIZATION:
-   - Shorter paragraphs (2-3 sentences max)
-   - Active voice, conversational tone
-   - Address reader directly ("you", "your")
-   - Break up text with subheadings every 150 words
-   - Use bold for key terms and insights
-   - Add tables/lists to visualize complex info
-   - Include "did you know?" style callouts
-
-4. SEO & TRAFFIC OPTIMIZATION:
-   - Include target keywords naturally (2-3% density)
-   - Add LSI keywords (related terms) throughout
-   - Strong H2 headers with keywords
-   - Longer content depth (1500+ words)
-   - Internal link suggestions: "Related: [topic]"
-   - FAQ section: Answer common questions
-   - Meta description suggestion (160 chars)
-
-5. MONETIZATION-READY STRUCTURE:
-   - Position 1 (25% into post): "Recommended solution" box
-   - Position 2 (60% into post): "Tools/Products that help" comparison table
-   - Position 3 (end): "Premium resource" CTA
-   - Natural product integration points (not salesy)
-   - Problem → Product connection clarity
-   - Trust signals: expert credentials, studies cited
-
-6. ENGAGEMENT HOOKS (to get clicks/shares):
-   - Surprising facts or statistics
-   - Common misconceptions debunked
-   - "Before/after" comparisons
-   - Actionable steps readers can implement immediately
-   - Visual elements descriptions (charts, images)
-
-7. QUALITY STANDARDS:
-   - Fact-check all claims and statistics
-   - Remove outdated information
-   - Ensure accuracy and credibility
-   - Professional tone with friendly delivery
-   - No grammatical errors
-   - Consistent formatting throughout
-
-OUTPUT FORMAT:
-- Return ONLY the enhanced HTML content
-- Use <h2> for main sections
-- Use <p> for paragraphs
-- Use <strong> for emphasis
-- Use <ul> or <ol> for lists
-- Use <table> for comparisons
-- Keep engaging but professional
-
-GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
-✓ Readers will LOVE and SHARE
-✓ Google will RANK highly
-✓ Monetization-ready with natural product placement"""
+Return ONLY the enhanced HTML content."""
         return prompt
 
     def enhance_with_groq(self, content, title, retry_count=0, max_retries=2):
