@@ -1,0 +1,284 @@
+{
+  "rework_automation_config": {
+    "version": "2.0",
+    "enabled": true,
+    "description": "REWORK Automation - Continuous blog optimization and revenue generation",
+
+    "scheduling": {
+      "frequency": "every_6_hours",
+      "timezone": "UTC",
+      "backup_frequency": "daily",
+      "max_blogs_per_run": 100,
+      "min_interval_between_runs_minutes": 360
+    },
+
+    "blog_selection": {
+      "status": "published",
+      "include_criteria": [
+        "not_updated_in_last_24_hours",
+        "contains_code_artifacts",
+        "contains_template_labels",
+        "contains_placeholder_content",
+        "missing_featured_image",
+        "missing_meta_description",
+        "missing_revenue_elements"
+      ],
+      "exclude_criteria": [
+        "in_revision_phase",
+        "manually_locked",
+        "flagged_for_review"
+      ],
+      "sort_by": "oldest_first"
+    },
+
+    "optimization_steps": {
+      "step_1_code_cleanup": {
+        "enabled": true,
+        "remove_code_fences": true,
+        "remove_html_metadata": true,
+        "remove_template_labels": true,
+        "remove_encoded_entities": true
+      },
+      "step_2_content_structure": {
+        "enabled": true,
+        "remove_duplicates": true,
+        "fix_heading_hierarchy": true,
+        "fix_anchor_links": true,
+        "clean_table_of_contents": true
+      },
+      "step_3_engagement": {
+        "enabled": true,
+        "add_engagement_hooks": true,
+        "colorize_keywords": true,
+        "add_persuasive_language": true,
+        "add_calls_to_action": true,
+        "add_social_proof": true,
+        "colored_keywords": {
+          "proven": "#d32f2f",
+          "exclusive": "#1976d2",
+          "transform": "#388e3c",
+          "powerful": "#f57c00",
+          "revenue": "#7b1fa2",
+          "profit": "#d32f2f",
+          "success": "#388e3c",
+          "optimize": "#1976d2",
+          "achieve": "#ff6f00",
+          "guaranteed": "#c62828",
+          "elite": "#6a1b9a",
+          "premium": "#0d47a1"
+        }
+      },
+      "step_4_monetization": {
+        "enabled": true,
+        "add_product_sections": true,
+        "add_affiliate_links": true,
+        "add_faq_section": true,
+        "add_resources_section": true,
+        "add_pricing_info": true,
+        "revenue_focus_keywords": [
+          "revenue",
+          "profit",
+          "income",
+          "earnings",
+          "monetization",
+          "conversion",
+          "sales",
+          "commission"
+        ]
+      },
+      "step_5_quality": {
+        "enabled": true,
+        "fix_spelling": true,
+        "fix_alignment": true,
+        "normalize_spacing": true,
+        "fix_punctuation": true,
+        "validate_links": true,
+        "check_images": true
+      },
+      "step_6_images": {
+        "enabled": true,
+        "verify_featured_image": true,
+        "validate_image_relevance": true,
+        "check_image_alt_text": true,
+        "check_image_optimization": true
+      }
+    },
+
+    "wordpress_integration": {
+      "enabled": true,
+      "auto_sync": true,
+      "sync_after_optimization": true,
+      "sync_timeout_seconds": 30,
+      "retry_on_failure": true,
+      "max_retries": 3,
+      "post_sync_actions": [
+        "clear_cache",
+        "regenerate_sitemap",
+        "update_search_index"
+      ]
+    },
+
+    "monitoring": {
+      "enabled": true,
+      "health_check_interval_minutes": 30,
+      "log_all_changes": true,
+      "track_metrics": true,
+      "alert_on_errors": true,
+      "metrics_to_track": [
+        "blogs_processed",
+        "issues_fixed",
+        "revenue_items_added",
+        "sync_success_rate",
+        "error_count",
+        "execution_time"
+      ]
+    },
+
+    "error_handling": {
+      "enabled": true,
+      "retry_failed_blogs": true,
+      "max_retries_per_blog": 3,
+      "skip_on_permanent_error": true,
+      "log_failures": true,
+      "alert_on_multiple_failures": true,
+      "failure_threshold": 5
+    },
+
+    "reporting": {
+      "enabled": true,
+      "generate_daily_report": true,
+      "generate_weekly_summary": true,
+      "save_to_database": true,
+      "include_in_logs": true,
+      "report_format": "json",
+      "retention_days": 90
+    },
+
+    "integration_with_other_robots": {
+      "R0_WordPress_Importer": {
+        "enabled": true,
+        "trigger_after_rework": false,
+        "sync_blog_metadata": true
+      },
+      "R1_Content_Generator": {
+        "enabled": true,
+        "apply_rework_to_new_blogs": true,
+        "delay_publication_until_reworked": false
+      },
+      "R3_Content_Cleaner": {
+        "enabled": true,
+        "coordinate_with_rework": true,
+        "avoid_duplicate_processing": true
+      },
+      "R7_Enhancement_Engine": {
+        "enabled": true,
+        "use_enhanced_content": true,
+        "sync_improvements": true
+      },
+      "R14b_Digital_Product_Creator": {
+        "enabled": true,
+        "link_products_from_blogs": true,
+        "auto_create_for_reworked_blogs": false
+      },
+      "R31_WordPress_Publisher": {
+        "enabled": true,
+        "sync_after_publication": true,
+        "coordinate_with_schedules": true
+      },
+      "R37_Retrofit_Engine": {
+        "enabled": true,
+        "coordinate_retrofit_timing": true,
+        "track_monetization_metrics": true
+      }
+    },
+
+    "performance": {
+      "max_concurrent_operations": 1,
+      "delay_between_blogs_ms": 1000,
+      "batch_size": 10,
+      "database_pool_size": 5,
+      "api_timeout_seconds": 30,
+      "max_execution_time_minutes": 60
+    },
+
+    "safety": {
+      "enable_dry_run": false,
+      "backup_before_optimization": true,
+      "rollback_on_critical_error": true,
+      "preserve_manual_edits": true,
+      "exclude_locked_blogs": true,
+      "require_approval_for_major_changes": false
+    },
+
+    "notifications": {
+      "enabled": true,
+      "notify_on_completion": true,
+      "notify_on_error": true,
+      "notify_on_milestone": true,
+      "milestone_threshold": 50,
+      "email_on_failure": true,
+      "slack_integration": false,
+      "log_to_database": true
+    },
+
+    "optimization_templates": {
+      "product_showcase_template": {
+        "enabled": true,
+        "position": "after_introduction",
+        "section_title": "📦 Recommended Solutions",
+        "items": 3,
+        "include_pricing": true
+      },
+      "faq_template": {
+        "enabled": true,
+        "position": "before_conclusion",
+        "section_title": "❓ Frequently Asked Questions",
+        "min_questions": 3,
+        "address_objections": true
+      },
+      "resources_template": {
+        "enabled": true,
+        "position": "at_end",
+        "section_title": "🔗 Resources & Tools",
+        "min_resources": 3,
+        "include_affiliate_links": true
+      },
+      "cta_template": {
+        "enabled": true,
+        "position": "at_end",
+        "text": "Ready to get started? Take action today and transform your results!",
+        "button_text": "Get Started Now"
+      }
+    },
+
+    "content_guidelines": {
+      "minimum_word_count": 1000,
+      "minimum_engagement_score": 7,
+      "maximum_placeholder_count": 0,
+      "maximum_code_artifact_count": 0,
+      "required_sections": [
+        "introduction",
+        "main_content",
+        "faq",
+        "resources",
+        "conclusion"
+      ],
+      "required_metadata": [
+        "title",
+        "meta_description",
+        "featured_image",
+        "keywords"
+      ]
+    },
+
+    "advanced_features": {
+      "ai_powered_rewriting": true,
+      "sentiment_analysis": false,
+      "seo_optimization": true,
+      "readability_scoring": true,
+      "engagement_scoring": true,
+      "revenue_potential_analysis": true,
+      "competitor_comparison": false
+    }
+  }
+}
