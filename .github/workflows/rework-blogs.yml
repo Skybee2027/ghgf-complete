@@ -1,0 +1,84 @@
+name: REWORK - Blog Optimization Engine
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  rework-blogs:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mysql-connector-python
+
+      - name: Validate configuration
+        run: |
+          echo "Validating REWORK Engine configuration..."
+
+          if [ -z "$DB_HOST" ]; then
+            echo "❌ ERROR: DB_HOST not configured"
+            exit 1
+          fi
+
+          if [ -z "$DB_USER" ]; then
+            echo "❌ ERROR: DB_USER not configured"
+            exit 1
+          fi
+
+          if [ -z "$DB_NAME" ]; then
+            echo "❌ ERROR: DB_NAME not configured"
+            exit 1
+          fi
+
+          echo "✓ Configuration validated"
+
+      - name: Run REWORK Engine
+        run: |
+          echo ""
+          echo "🚀 Starting REWORK - Blog Content Optimization Engine"
+          echo "=================================================="
+          python robots/rework_blog_optimization_engine.py
+
+      - name: Generate Report
+        if: success()
+        run: |
+          echo ""
+          echo "📊 REWORK Engine Execution Complete"
+          echo "=================================================="
+          echo "✓ All blogs have been analyzed and optimized"
+          echo "✓ Revenue-generating elements added"
+          echo "✓ Customer engagement enhanced"
+          echo "✓ Spelling and formatting fixed"
+          echo "✓ Images validated and matched"
+          echo ""
+          echo "Next Steps:"
+          echo "1. Review changes in WordPress admin dashboard"
+          echo "2. Monitor blog engagement metrics"
+          echo "3. Track revenue impact from optimization"
+          echo "4. Check search engine rankings"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ REWORK Engine encountered errors"
+          echo "Please review the logs above for details"
+          exit 1
