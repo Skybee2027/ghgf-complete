@@ -127,13 +127,33 @@ def update_live_wordpress_post(slug, final_body, img, alt):
     api = uploader.wp_api_base
 
     # Find the single live post for this slug
-    r = requests.get(f"{api}/posts", params={"slug": slug, "status": "any", "per_page": 100}, auth=auth, timeout=30)
-    r.raise_for_status()
-    # The API's slug filter is not reliable on this site, so match the slug exactly here
-    matches = [p for p in r.json() if p.get("slug") == slug]
+    # The API's slug filter is not reliable on this site, so page through and match here.
+    # A post matches if its slug, its URL, or its title identifies this article.
+    fragment = "health-and-fitness-trends-to-watch-in-2026"
+    matches = []
+    for page in range(1, 21):
+        r = requests.get(
+            f"{api}/posts",
+            params={"status": "any", "per_page": 100, "page": page, "orderby": "date", "order": "desc"},
+            auth=auth,
+            timeout=30,
+        )
+        if r.status_code == 400:  # past the last page
+            break
+        r.raise_for_status()
+        batch = r.json()
+        if not batch:
+            break
+        for p in batch:
+            text = " ".join([p.get("slug", ""), p.get("link", ""), p.get("title", {}).get("rendered", "")]).lower()
+            if fragment in text or p.get("slug") == slug:
+                matches.append(p)
     if len(matches) != 1:
         stage(f"abort-wp-matches-{len(matches)}")
-        raise SystemExit(f"ABORT: expected 1 WordPress post for slug '{slug}', found {len(matches)}")
+        print("WordPress candidates:")
+        for p in matches:
+            print(f"  id={p['id']} status={p['status']} slug={p['slug']} link={p['link']}")
+        raise SystemExit(f"ABORT: expected 1 WordPress post for this article, found {len(matches)}")
     wp_id = matches[0]["id"]
     print(f"WordPress post id={wp_id} status={matches[0]['status']}")
 
