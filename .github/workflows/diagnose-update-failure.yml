@@ -1,0 +1,128 @@
+name: Diagnose Update Failure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+      WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
+    steps:
+      - name: Check Secrets Are Available
+        run: |
+          echo "Checking if secrets are configured..."
+          if [ -z "$DB_HOST" ]; then
+            echo "❌ DB_HOST is NOT set"
+            exit 1
+          fi
+          if [ -z "$WORDPRESS_PASSWORD" ]; then
+            echo "❌ WORDPRESS_PASSWORD is NOT set"
+            exit 1
+          fi
+          echo "✓ Secrets are available"
+          echo "  DB_HOST: $DB_HOST"
+          echo "  DB_USER: $DB_USER"
+          echo "  DB_NAME: $DB_NAME"
+          echo "  WORDPRESS_URL: $WORDPRESS_URL"
+          echo "  WORDPRESS_USER: $WORDPRESS_USER"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: pip install requests mysql-connector-python --break-system-packages
+
+      - name: Test Database Connection
+        run: |
+          python3 << 'PYTHON_EOF'
+          import mysql.connector
+          import os
+
+          print("Testing database connection...")
+          try:
+              conn = mysql.connector.connect(
+                  host=os.getenv('DB_HOST'),
+                  user=os.getenv('DB_USER'),
+                  password=os.getenv('DB_PASSWORD'),
+                  database=os.getenv('DB_NAME'),
+                  connection_timeout=10
+              )
+              print("✓ Database connection successful!")
+
+              cursor = conn.cursor(dictionary=True)
+              cursor.execute("SELECT COUNT(*) as count FROM blog_posts")
+              result = cursor.fetchone()
+              print(f"✓ Blog posts table has {result['count']} posts")
+              cursor.close()
+              conn.close()
+          except Exception as e:
+              print(f"❌ Database error: {e}")
+              exit(1)
+          PYTHON_EOF
+
+      - name: Test WordPress Connection
+        run: |
+          python3 << 'PYTHON_EOF'
+          import requests
+          import os
+
+          print("Testing WordPress API connection...")
+          try:
+              auth = (os.getenv('WORDPRESS_USER'), os.getenv('WORDPRESS_PASSWORD'))
+              headers = {'Content-Type': 'application/json'}
+
+              response = requests.get(
+                  f"{os.getenv('WORDPRESS_URL')}/wp-json/wp/v2/users/me",
+                  auth=auth,
+                  headers=headers,
+                  timeout=10
+              )
+
+              if response.status_code == 200:
+                  print("✓ WordPress authentication successful!")
+              else:
+                  print(f"❌ WordPress auth failed: {response.status_code}")
+                  print(response.text[:200])
+                  exit(1)
+          except Exception as e:
+              print(f"❌ WordPress error: {e}")
+              exit(1)
+          PYTHON_EOF
+
+      - name: List Database Posts
+        run: |
+          python3 << 'PYTHON_EOF'
+          import mysql.connector
+          import os
+
+          conn = mysql.connector.connect(
+              host=os.getenv('DB_HOST'),
+              user=os.getenv('DB_USER'),
+              password=os.getenv('DB_PASSWORD'),
+              database=os.getenv('DB_NAME')
+          )
+          cursor = conn.cursor(dictionary=True)
+          cursor.execute("SELECT id, title, wordpress_post_id FROM blog_posts WHERE title LIKE '%Trends%' LIMIT 5")
+          posts = cursor.fetchall()
+
+          print("\nPosts matching 'Trends':")
+          for post in posts:
+              print(f"  ID: {post['id']}, WP ID: {post['wordpress_post_id']}, Title: {post['title'][:40]}")
+
+          cursor.close()
+          conn.close()
+          PYTHON_EOF
