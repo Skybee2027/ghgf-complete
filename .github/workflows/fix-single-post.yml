@@ -47,7 +47,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install mysql-connector-python requests
+        run: pip install mysql-connector-python requests anthropic
 
       - name: Dry run (all checks, no writes)
         run: |

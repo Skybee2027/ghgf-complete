@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(ROOT, "robots"))
 
 import mysql.connector  # noqa: E402
 from content_sanitizer import clean_content  # noqa: E402
-from r7_image_finder import ImageFinder  # noqa: E402
+from r7_image_finder import ImageFinderEnhanced  # noqa: E402
 
 
 def connect():
@@ -63,7 +63,7 @@ def find_post(conn, slug, title_hint):
 
 
 def find_image(title, used_urls):
-    finder = ImageFinder()
+    finder = ImageFinderEnhanced()
     query = "health fitness wellness healthy lifestyle"
     for search in (finder.search_pexels, finder.search_unsplash, finder.search_pixabay):
         try:
