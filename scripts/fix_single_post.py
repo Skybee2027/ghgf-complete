@@ -111,6 +111,38 @@ def insert_image(body, img, alt):
     return body[:end] + "\n" + figure + body[end:]
 
 
+def upload_media(api, auth, image_url):
+    """Download the image and upload it to the WordPress media library. Returns the media id or None."""
+    import re
+    import requests
+
+    dl = requests.get(image_url, timeout=30)
+    if dl.status_code != 200 or not dl.content:
+        stage(f"abort-image-download-{dl.status_code}")
+        print(f"Image download failed: HTTP {dl.status_code}")
+        return None
+
+    ctype = dl.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+    ext = {"image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(ctype, "jpg")
+    base = re.sub(r"[^a-zA-Z0-9-]+", "-", image_url.split("?")[0].rstrip("/").split("/")[-1]).strip("-") or "featured"
+    filename = f"{base[:60]}.{ext}"
+
+    up = requests.post(
+        f"{api}/media",
+        auth=auth,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Content-Type": ctype},
+        data=dl.content,
+        timeout=60,
+    )
+    if up.status_code not in (200, 201):
+        stage(f"abort-wp-media-{up.status_code}")
+        print(f"WordPress media upload failed: HTTP {up.status_code} {up.text[:200]}")
+        return None
+    media_id = up.json().get("id")
+    print(f"Featured image uploaded to WordPress: media id {media_id}")
+    return media_id
+
+
 def update_live_wordpress_post(slug, final_body, img, alt):
     """
     Update the one existing WordPress post for this slug: upload the featured image,
@@ -157,11 +189,9 @@ def update_live_wordpress_post(slug, final_body, img, alt):
     wp_id = matches[0]["id"]
     print(f"WordPress post id={wp_id} status={matches[0]['status']}")
 
-    # Upload the featured image (one retry for transient failures)
-    media_id = uploader.upload_featured_image_to_wordpress(img["url"]) or \
-        uploader.upload_featured_image_to_wordpress(img["url"])
+    # Upload the featured image with a clean filename and the real content type
+    media_id = upload_media(api, auth, img["url"])
     if not media_id:
-        stage("abort-wp-media")
         raise SystemExit("ABORT: featured image could not be uploaded to WordPress")
 
     # Update content and featured image
