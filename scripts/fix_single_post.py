@@ -270,7 +270,9 @@ def main():
         wp_media_id = update_live_wordpress_post(post["slug"], final_body, img, alt)
         stage("wordpress-updated")
 
-        # 6b. Database (idempotent schema fix first: R8 needs this column)
+        # 6b. Database. The WordPress work can take a while, so use a fresh connection.
+        conn.close()
+        conn = connect()
         cur = conn.cursor()
         cur.execute("ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS featured_image_alt_text TEXT")
         cur.execute(
