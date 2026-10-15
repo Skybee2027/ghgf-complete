@@ -1,0 +1,54 @@
+name: Fix Post Quality - Phase 1
+
+on:
+  workflow_dispatch:
+
+env:
+  DB_HOST: ${{ secrets.DB_HOST }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+
+jobs:
+  fix-phase-1:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install mysql-connector-python --quiet
+    
+    - name: Run Phase 1 Fix
+      run: |
+        echo "========================================"
+        echo "PHASE 1 - POST QUALITY FIX"
+        echo "========================================"
+        echo ""
+        echo "Database: $DB_HOST / $DB_NAME"
+        echo "Running fix script..."
+        echo ""
+        python3 scripts/fix_post_quality_phase1.py
+    
+    - name: Output Summary
+      if: always()
+      run: |
+        echo ""
+        echo "========================================"
+        echo "✅ PHASE 1 COMPLETE"
+        echo "========================================"
+        echo ""
+        echo "Next Steps:"
+        echo "1. Visit your post on the website"
+        echo "2. Verify code artifacts are removed"
+        echo "3. Verify template labels are removed"
+        echo "4. Run Phase 2 when ready"
+        echo ""
+
