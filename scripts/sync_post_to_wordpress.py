@@ -14,10 +14,14 @@ import base64
 from datetime import datetime
 
 # Configuration
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_USER = os.getenv('DB_USER', 'root')
-DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-DB_NAME = os.getenv('DB_NAME', 'ghgf_blogging')
+DB_HOST = os.getenv('DB_HOST')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_NAME = os.getenv('DB_NAME')
+
+if not all([DB_HOST, DB_USER, DB_NAME]):
+    print("❌ CRITICAL: DB_HOST, DB_USER, and DB_NAME environment variables must be set")
+    sys.exit(1)
 
 WORDPRESS_URL = os.getenv('WORDPRESS_URL', 'https://greathealthgreatfitness.com')
 WORDPRESS_USER = os.getenv('WORDPRESS_USER', 'api_user')
@@ -51,7 +55,7 @@ except Exception as e:
 # Find the post
 print("\n📖 Finding post in database...")
 try:
-    cursor.execute("SELECT * FROM blog_posts WHERE title LIKE '%Health%Fitness%Trends%' LIMIT 1")
+    cursor.execute("SELECT * FROM blog_posts WHERE title LIKE %s LIMIT 1", ('%Health%Fitness%Trends%',))
     post = cursor.fetchone()
 
     if not post:

@@ -34,10 +34,15 @@ class DigitalProductCreator:
         self.wordpress_user = os.getenv('WORDPRESS_USER', '')
         self.wordpress_pass = os.getenv('WORDPRESS_PASSWORD', '')
 
-        self.db_host = os.getenv('DB_HOST', '193.203.166.223')
-        self.db_user = os.getenv('DB_USER', '')
-        self.db_password = os.getenv('DB_PASSWORD', '')
-        self.db_name = os.getenv('DB_NAME', 'u853068512_ghgf_blogging')
+        self.db_host = os.getenv('DB_HOST')
+        self.db_user = os.getenv('DB_USER')
+        self.db_password = os.getenv('DB_PASSWORD')
+        self.db_name = os.getenv('DB_NAME')
+
+        # Validate required environment variables
+        if not all([self.db_host, self.db_user, self.db_name]):
+            logger.error("CRITICAL: DB_HOST, DB_USER, and DB_NAME environment variables must be set")
+            raise ValueError("Missing required database configuration")
 
         self.connection = None
         self.posts_processed = 0

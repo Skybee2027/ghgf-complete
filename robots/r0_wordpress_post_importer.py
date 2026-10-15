@@ -27,16 +27,21 @@ class WordPressPostImporter:
     def __init__(self):
         """Initialize with environment variables"""
         self.wordpress_url = os.getenv('WORDPRESS_URL', '').rstrip('/')
-        self.db_host = os.getenv('DB_HOST', '193.203.166.223')
-        self.db_user = os.getenv('DB_USER', '')
-        self.db_password = os.getenv('DB_PASSWORD', '')
-        self.db_name = os.getenv('DB_NAME', 'u853068512_ghgf_blogging')
-        
+        self.db_host = os.getenv('DB_HOST')
+        self.db_user = os.getenv('DB_USER')
+        self.db_password = os.getenv('DB_PASSWORD')
+        self.db_name = os.getenv('DB_NAME')
+
+        # Validate required environment variables
+        if not all([self.db_host, self.db_user, self.db_name]):
+            logger.error("CRITICAL: DB_HOST, DB_USER, and DB_NAME environment variables must be set")
+            raise ValueError("Missing required database configuration")
+
         self.connection = None
         self.posts_imported = 0
         self.posts_updated = 0
         self.posts_failed = 0
-        
+
         logger.info("WordPress Post Importer initialized")
         logger.info(f"WordPress URL: {self.wordpress_url}")
         logger.info(f"Database: {self.db_name}@{self.db_host}")

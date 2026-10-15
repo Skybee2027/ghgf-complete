@@ -239,23 +239,13 @@ try:
         "blocks": []  # Clear any block editor content
     }
 
-    # Use PUT instead of POST for proper replacement
-    response = requests.put(
+    # Use POST for WordPress REST API updates (PUT not supported)
+    response = requests.post(
         update_url,
         json=update_data,
         auth=(wp_user, wp_password),
         timeout=10
     )
-
-    # Fall back to POST if PUT not supported
-    if response.status_code == 405:
-        print("⚠️ PUT not supported, using POST...")
-        response = requests.post(
-            update_url,
-            json=update_data,
-            auth=(wp_user, wp_password),
-            timeout=10
-        )
 
     if response.status_code in [200, 201]:
         new_words = len(ENHANCED_CONTENT.split())
