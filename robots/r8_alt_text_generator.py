@@ -76,11 +76,12 @@ class AltTextGenerator:
                 SELECT bp.id, bp.title, bp.content, bp.topic
                 FROM blog_posts bp
                 WHERE bp.status = 'draft'
+                AND bp.featured_image_id IS NULL
                 AND EXISTS (
                     SELECT 1 FROM image_tracking it
                     WHERE it.blog_id = bp.id
                 )
-                ORDER BY bp.created_at DESC
+                ORDER BY bp.created_at ASC
                 LIMIT 1
             """
             cursor.execute(query)
@@ -96,7 +97,7 @@ class AltTextGenerator:
         try:
             cursor = conn.cursor(dictionary=True)
             query = """
-                SELECT id, image_url, source, title, topic
+                SELECT id, image_url, source, title, topic, alt_text
                 FROM image_tracking
                 WHERE blog_id = %s
                 ORDER BY used_date ASC
