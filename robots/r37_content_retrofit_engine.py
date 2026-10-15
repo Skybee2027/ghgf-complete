@@ -35,10 +35,15 @@ class ContentRetrofitEngine:
 
     def __init__(self):
         """Initialize with environment variables"""
-        self.db_host = os.getenv('DB_HOST', '193.203.166.223')
-        self.db_user = os.getenv('DB_USER', '')
-        self.db_password = os.getenv('DB_PASSWORD', '')
-        self.db_name = os.getenv('DB_NAME', 'u853068512_ghgf_blogging')
+        # Database config - MUST be provided via environment variables
+        self.db_host = os.getenv('DB_HOST')
+        self.db_user = os.getenv('DB_USER')
+        self.db_password = os.getenv('DB_PASSWORD')
+        self.db_name = os.getenv('DB_NAME')
+
+        # Validate database configuration
+        if not all([self.db_host, self.db_user, self.db_name]):
+            raise ValueError("CRITICAL: DB_HOST, DB_USER, and DB_NAME environment variables must be set")
 
         # AI APIs - all optional, using fallback chain
         self.groq_key = os.getenv('GROQ_API_KEY')
