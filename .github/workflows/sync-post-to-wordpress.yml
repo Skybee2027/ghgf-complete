@@ -1,0 +1,52 @@
+name: Sync Post Changes to WordPress
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync-wordpress:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+      WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          pip install requests mysql-connector-python --break-system-packages
+
+      - name: Sync Database to WordPress
+        run: |
+          echo ""
+          echo "========================================"
+          echo "SYNCING DATABASE CHANGES TO WORDPRESS"
+          echo "========================================"
+          echo ""
+          python3 scripts/sync_post_to_wordpress.py
+
+      - name: Completion
+        run: |
+          echo ""
+          echo "========================================"
+          echo "✅ SYNC COMPLETE"
+          echo "========================================"
+          echo ""
+          echo "Visit your post:"
+          echo "https://greathealthgreatfitness.com/index.php/2026/10/14/complete-guide-to-health-and-fitness-trends-to-watch-in-2026/"
+          echo ""
+          echo "Hard refresh the page (Ctrl+F5) to clear cache"
+          echo ""
