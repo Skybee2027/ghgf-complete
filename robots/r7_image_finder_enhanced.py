@@ -464,7 +464,7 @@ Return ONLY comma-separated keywords (no explanations):"""
             print(f"  Status: {status_color}{'PASS' if images_saved else 'FAIL'}{RESET}")
             print('='*70 + "\n")
 
-            return images_saved and len(selected) >= 3
+            return images_saved and len(selected) >= 1  # one image is enough for the featured image; <3 is a warning, not a failure
 
         except Exception as e:
             logger.error(f"Error: {str(e)}")
