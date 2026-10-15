@@ -1,0 +1,53 @@
+name: Fix Post Quality - Phase 3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-phase-3:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          pip install mysql-connector-python --break-system-packages
+
+      - name: Run Phase 3 Fixes
+        run: |
+          echo ""
+          echo "========================================"
+          echo "PHASE 3 - POST QUALITY FIX"
+          echo "========================================"
+          echo ""
+          echo "Database: *** / ***"
+          echo "Running fix script..."
+          echo ""
+          python3 scripts/fix_post_quality_phase3.py
+
+      - name: Completion Summary
+        run: |
+          echo ""
+          echo "========================================"
+          echo "✅ PHASE 3 COMPLETE"
+          echo "========================================"
+          echo ""
+          echo "Next Steps:"
+          echo "1. Visit your post on the website"
+          echo "2. Verify social media links are present"
+          echo "3. Verify related articles section is present"
+          echo "4. Run Phase 4 when ready"
+          echo ""
