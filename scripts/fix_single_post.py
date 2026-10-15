@@ -41,23 +41,26 @@ def connect():
     )
 
 
+SELECT_COLS = """SELECT id, title, slug, content, status, featured_image_id, featured_image_alt_text
+                 FROM blog_posts"""
+
+
 def find_post(conn, slug, title_hint):
+    """Match by exact slug, then slug fragment, then title pattern. Must match exactly one row."""
     cur = conn.cursor(dictionary=True)
-    cur.execute(
-        """SELECT id, title, slug, content, status, featured_image_id, featured_image_alt_text
-           FROM blog_posts WHERE slug = %s""",
-        (slug,),
-    )
+    cur.execute(f"{SELECT_COLS} WHERE slug = %s", (slug,))
     rows = cur.fetchall()
+    if not rows:
+        cur.execute(f"{SELECT_COLS} WHERE slug LIKE %s", (f"%{slug}%",))
+        rows = cur.fetchall()
     if not rows and title_hint:
-        cur.execute(
-            """SELECT id, title, slug, content, status, featured_image_id, featured_image_alt_text
-               FROM blog_posts WHERE title LIKE %s""",
-            (f"%{title_hint}%",),
-        )
+        cur.execute(f"{SELECT_COLS} WHERE title LIKE %s", (f"%{title_hint}%",))
         rows = cur.fetchall()
     cur.close()
     if len(rows) != 1:
+        print(f"Candidates found ({len(rows)}):")
+        for r in rows:
+            print(f"  id={r['id']} status={r['status']} slug={r['slug']} title={r['title']!r}")
         raise SystemExit(f"ABORT: expected exactly 1 matching post, found {len(rows)}")
     return rows[0]
 

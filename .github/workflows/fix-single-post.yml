@@ -13,7 +13,7 @@ on:
       title_hint:
         description: 'Title fragment used if the slug does not match'
         required: false
-        default: 'Health and Fitness Trends'
+        default: 'Health and Fitness%Trends to Watch in 2026'
       body_file:
         description: 'Path to the cleaned HTML body in the repo'
         required: true
