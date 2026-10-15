@@ -48,8 +48,7 @@ def connect():
     )
 
 
-SELECT_COLS = """SELECT id, title, slug, content, status, featured_image_id, featured_image_alt_text
-                 FROM blog_posts"""
+SELECT_COLS = "SELECT id, title, slug, content, status FROM blog_posts"
 
 
 def find_post(conn, slug, title_hint):
@@ -184,7 +183,9 @@ def main():
     except SystemExit:
         conn.rollback()
         raise
-    except Exception:
+    except Exception as exc:
+        stage(f"error-{type(exc).__name__}")
+        print(f"ERROR: {type(exc).__name__}: {exc}")
         conn.rollback()
         raise
     finally:
