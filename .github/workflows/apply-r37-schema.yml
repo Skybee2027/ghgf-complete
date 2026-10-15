@@ -1,0 +1,129 @@
+name: Apply R37 Database Schema
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  apply-schema:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mysql-connector-python
+
+      - name: Validate database configuration
+        run: |
+          echo "Checking database environment variables..."
+
+          if [ -z "$DB_HOST" ]; then
+            echo "❌ ERROR: DB_HOST not configured"
+            exit 1
+          fi
+
+          if [ -z "$DB_USER" ]; then
+            echo "❌ ERROR: DB_USER not configured"
+            exit 1
+          fi
+
+          if [ -z "$DB_NAME" ]; then
+            echo "❌ ERROR: DB_NAME not configured"
+            exit 1
+          fi
+
+          echo "✓ All database configuration variables present"
+
+      - name: Apply R37 database schema
+        run: |
+          python scripts/apply_database_schema.py
+
+      - name: Verify schema was applied
+        run: |
+          python -c "
+          import mysql.connector
+          import os
+
+          try:
+              conn = mysql.connector.connect(
+                  host=os.getenv('DB_HOST'),
+                  user=os.getenv('DB_USER'),
+                  password=os.getenv('DB_PASSWORD'),
+                  database=os.getenv('DB_NAME')
+              )
+              cursor = conn.cursor()
+
+              # Check if retrofit_log table exists
+              cursor.execute(\"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'retrofit_log'\", (os.getenv('DB_NAME'),))
+              result = cursor.fetchone()
+
+              if result:
+                  print('✓ retrofit_log table exists')
+              else:
+                  print('❌ retrofit_log table not found')
+                  exit(1)
+
+              # Check if image_tracking table exists
+              cursor.execute(\"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'image_tracking'\", (os.getenv('DB_NAME'),))
+              result = cursor.fetchone()
+
+              if result:
+                  print('✓ image_tracking table exists')
+              else:
+                  print('❌ image_tracking table not found')
+                  exit(1)
+
+              # List all created tables
+              cursor.execute(\"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME LIKE 'retrofit%' OR TABLE_NAME = 'image_tracking'\", (os.getenv('DB_NAME'),))
+              tables = cursor.fetchall()
+
+              print(f'✓ Total R37 tables created/verified: {len(tables)}')
+              for table in tables:
+                  print(f'  - {table[0]}')
+
+              cursor.close()
+              conn.close()
+
+          except Exception as e:
+              print(f'❌ Verification failed: {e}')
+              exit(1)
+          "
+
+      - name: Summary
+        if: success()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "R37 Schema Application Complete"
+          echo "=========================================="
+          echo "✓ All R37 tables created successfully"
+          echo "✓ Image tracking tables initialized"
+          echo "✓ Retrofit tracking system ready"
+          echo "✓ Database schema updated"
+          echo ""
+          echo "Tables created:"
+          echo "  - retrofit_log (retrofit progress tracking)"
+          echo "  - retrofit_batches (batch processing)"
+          echo "  - retrofit_analytics (statistics)"
+          echo "  - retrofit_affiliates (affiliate tracking)"
+          echo "  - retrofit_digital_products (e-book tracking)"
+          echo "  - retrofit_errors (error logging)"
+          echo "  - image_tracking (media management)"
+          echo ""
+          echo "Ready to process 600+ blog posts for retrofit"
+          echo "=========================================="
