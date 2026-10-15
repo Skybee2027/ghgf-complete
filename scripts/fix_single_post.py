@@ -127,9 +127,10 @@ def update_live_wordpress_post(slug, final_body, img, alt):
     api = uploader.wp_api_base
 
     # Find the single live post for this slug
-    r = requests.get(f"{api}/posts", params={"slug": slug, "status": "any"}, auth=auth, timeout=30)
+    r = requests.get(f"{api}/posts", params={"slug": slug, "status": "any", "per_page": 100}, auth=auth, timeout=30)
     r.raise_for_status()
-    matches = r.json()
+    # The API's slug filter is not reliable on this site, so match the slug exactly here
+    matches = [p for p in r.json() if p.get("slug") == slug]
     if len(matches) != 1:
         stage(f"abort-wp-matches-{len(matches)}")
         raise SystemExit(f"ABORT: expected 1 WordPress post for slug '{slug}', found {len(matches)}")
