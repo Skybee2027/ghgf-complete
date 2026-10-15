@@ -1,0 +1,75 @@
+name: Fix Single Blog Post (one-off)
+
+# Changes exactly one post, identified by slug. Does not publish to WordPress.
+# Run with apply=false first (dry run), review the output, then run apply=true.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Post slug'
+        required: true
+        default: 'complete-guide-to-health-and-fitness-trends-to-watch-in-2026'
+      title_hint:
+        description: 'Title fragment used if the slug does not match'
+        required: false
+        default: 'Health and Fitness Trends'
+      body_file:
+        description: 'Path to the cleaned HTML body in the repo'
+        required: true
+        default: 'fixes/complete-guide-health-fitness-trends-2026.html'
+      apply:
+        description: 'Write to the database (false = dry run)'
+        required: true
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+permissions:
+  contents: read
+
+jobs:
+  fix-post:
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY || '' }}
+      UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY || '' }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install mysql-connector-python requests
+
+      - name: Dry run (all checks, no writes)
+        run: |
+          python scripts/fix_single_post.py \
+            --slug "${{ github.event.inputs.slug }}" \
+            --title-hint "${{ github.event.inputs.title_hint }}" \
+            --body-file "${{ github.event.inputs.body_file }}" \
+            --dry-run
+
+      - name: Apply fix to database
+        if: ${{ github.event.inputs.apply == 'true' }}
+        run: |
+          python scripts/fix_single_post.py \
+            --slug "${{ github.event.inputs.slug }}" \
+            --title-hint "${{ github.event.inputs.title_hint }}" \
+            --body-file "${{ github.event.inputs.body_file }}"
+
+      - name: Upload backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-post-backup
+          path: fixes/backup-*.html
+          if-no-files-found: ignore
+          retention-days: 30

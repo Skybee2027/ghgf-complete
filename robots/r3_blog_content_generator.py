@@ -854,6 +854,14 @@ Return the complete expanded blog post in HTML format."""
                 print(f"  ✓ Content meets minimum length requirement ({word_count_initial} words)")
                 print(f"  ℹ Buffer note: R6 will add ~15-20 words for keywords (target: <1500 final)\n")
 
+            # Step 3b: Sanitize - remove code fences, front matter, duplicate title,
+            # empty images; block placeholders, truncation, and missing health disclaimers
+            from content_sanitizer import clean_content
+            content, sanitizer_problems = clean_content(content, title_data['title'])
+            if sanitizer_problems:
+                raise ValueError(f"Sanitizer rejected generated content: {sanitizer_problems}")
+            print(f"  ✓ Content sanitized (fences, front matter, duplicate title removed)")
+
             # Step 4: Fix HTML tags and inject keywords
             print(f"{BOLD}Step 4: Fixing HTML Tags & Optimizing Keywords{RESET}")
             content = self.fix_html_tags(content)
