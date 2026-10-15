@@ -163,9 +163,8 @@ print("-"*80)
 
 try:
     update_query = """
-        UPDATE blog_posts 
-        SET content = %s,
-            updated_at = NOW()
+        UPDATE blog_posts
+        SET content = %s
         WHERE id = %s
     """
     cursor.execute(update_query, (fixed_content, post_id))
