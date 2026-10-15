@@ -1,0 +1,85 @@
+name: Validate Environment Configuration
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+      WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Validate Database Credentials
+        run: |
+          echo "Checking database configuration..."
+
+          if [ -z "$DB_HOST" ]; then
+            echo "❌ CRITICAL: DB_HOST not configured"
+            exit 1
+          fi
+
+          if [ -z "$DB_USER" ]; then
+            echo "❌ CRITICAL: DB_USER not configured"
+            exit 1
+          fi
+
+          if [ -z "$DB_NAME" ]; then
+            echo "❌ CRITICAL: DB_NAME not configured"
+            exit 1
+          fi
+
+          echo "✓ Database credentials configured"
+
+      - name: Validate WordPress Configuration
+        run: |
+          echo "Checking WordPress configuration..."
+
+          if [ -z "$WORDPRESS_URL" ]; then
+            echo "❌ CRITICAL: WORDPRESS_URL not configured"
+            exit 1
+          fi
+
+          if [ -z "$WORDPRESS_USER" ]; then
+            echo "❌ CRITICAL: WORDPRESS_USER not configured"
+            exit 1
+          fi
+
+          if [ -z "$WORDPRESS_PASSWORD" ]; then
+            echo "❌ CRITICAL: WORDPRESS_PASSWORD not configured"
+            exit 1
+          fi
+
+          echo "✓ WordPress credentials configured"
+
+      - name: Validate AI API Keys
+        run: |
+          echo "Checking AI API configuration..."
+
+          if [ -z "$GROQ_API_KEY" ] && [ -z "$GEMINI_API_KEY" ] && [ -z "$COHERE_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+            echo "⚠️  WARNING: No AI API keys configured"
+            echo "   At least one AI provider is recommended for content generation"
+          else
+            echo "✓ At least one AI provider is configured"
+          fi
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "Environment Validation Complete"
+          echo "=========================================="
+          echo "✓ All critical credentials present"
+          echo "✓ System ready for operations"
