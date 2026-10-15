@@ -23,7 +23,7 @@ on:
         required: true
         default: 'false'
         type: choice
-        options: ['false', 'true']
+        options: ['false', 'true', 'verify']
 
 permissions:
   contents: read
@@ -53,6 +53,7 @@ jobs:
         run: pip install mysql-connector-python requests anthropic
 
       - name: Dry run (all checks, no writes)
+        if: ${{ github.event.inputs.apply == 'false' }}
         run: |
           python scripts/fix_single_post.py \
             --slug "${{ github.event.inputs.slug }}" \
@@ -60,13 +61,22 @@ jobs:
             --body-file "${{ github.event.inputs.body_file }}" \
             --dry-run
 
-      - name: Apply fix to database
+      - name: Apply fix to WordPress and database
         if: ${{ github.event.inputs.apply == 'true' }}
         run: |
           python scripts/fix_single_post.py \
             --slug "${{ github.event.inputs.slug }}" \
             --title-hint "${{ github.event.inputs.title_hint }}" \
             --body-file "${{ github.event.inputs.body_file }}"
+
+      - name: Verify live WordPress post (read-only)
+        if: ${{ github.event.inputs.apply == 'verify' }}
+        run: |
+          python scripts/fix_single_post.py \
+            --slug "${{ github.event.inputs.slug }}" \
+            --title-hint "${{ github.event.inputs.title_hint }}" \
+            --body-file "${{ github.event.inputs.body_file }}" \
+            --verify-wp
 
       - name: Read stage reached
         id: stage

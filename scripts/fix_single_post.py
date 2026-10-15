@@ -215,13 +215,59 @@ def update_live_wordpress_post(slug, final_body, img, alt):
     return media_id
 
 
+def verify_live_wordpress(slug):
+    """Read-only: report what WordPress stores for this article. Never writes."""
+    import requests
+    from r31_wordpress_uploader_publisher import WordPressUploaderPublisher
+
+    uploader = WordPressUploaderPublisher()
+    auth = (uploader.wp_user, uploader.wp_password)
+    api = uploader.wp_api_base
+    fragment = "health-and-fitness-trends-to-watch-in-2026"
+    found = None
+    for page in range(1, 21):
+        r = requests.get(f"{api}/posts", params={"status": "any", "per_page": 100, "page": page,
+                                                  "orderby": "date", "order": "desc"}, auth=auth, timeout=30)
+        if r.status_code == 400 or not r.json():
+            break
+        for p in r.json():
+            if fragment in (p.get("slug", "") + p.get("link", "")):
+                found = p
+                break
+        if found:
+            break
+    if not found:
+        stage("verify-not-found")
+        return
+    full = requests.get(f"{api}/posts/{found['id']}", params={"context": "edit"}, auth=auth, timeout=30).json()
+    raw = full["content"]["raw"]
+    flags = {
+        "fig": "<figure" in raw,
+        "fence": "```" in raw,
+        "front": raw.lstrip().startswith("---"),
+        "example": "example.com" in raw,
+        "xyz": "XYZ" in raw,
+        "disc": "health disclaimer" in raw.lower(),
+    }
+    summary = (f"verify-id{found['id']}-media{full.get('featured_media')}-"
+               + "-".join(f"{k}{int(v)}" for k, v in flags.items()))
+    stage(summary)
+    print(f"WordPress post id={found['id']} modified={full.get('modified')} featured_media={full.get('featured_media')}")
+    print(f"Flags: {flags}")
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--verify-wp", action="store_true")
     parser.add_argument("--slug", required=True)
     parser.add_argument("--title-hint", default="")
     parser.add_argument("--body-file", required=True)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    if args.verify_wp:
+        verify_live_wordpress(args.slug)
+        return
 
     with open(args.body_file, encoding="utf-8") as fh:
         new_body = fh.read()
