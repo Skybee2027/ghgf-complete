@@ -65,6 +65,22 @@ jobs:
             --title-hint "${{ github.event.inputs.title_hint }}" \
             --body-file "${{ github.event.inputs.body_file }}"
 
+      - name: Read stage reached
+        id: stage
+        if: always()
+        run: |
+          mkdir -p fixes
+          [ -f fixes/stage.txt ] || echo "none" > fixes/stage.txt
+          echo "value=$(tr -cd 'a-zA-Z0-9-' < fixes/stage.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Report stage reached
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage-${{ steps.stage.outputs.value }}
+          path: fixes/stage.txt
+          retention-days: 7
+
       - name: Upload backup
         if: always()
         uses: actions/upload-artifact@v4

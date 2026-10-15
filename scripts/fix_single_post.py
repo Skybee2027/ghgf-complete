@@ -30,6 +30,13 @@ from content_sanitizer import clean_content  # noqa: E402
 from r7_image_finder import ImageFinderEnhanced  # noqa: E402
 
 
+def stage(name):
+    """Record the last stage reached, so the workflow can report it even when a step fails."""
+    os.makedirs(os.path.join(ROOT, "fixes"), exist_ok=True)
+    with open(os.path.join(ROOT, "fixes", "stage.txt"), "w", encoding="utf-8") as fh:
+        fh.write(name)
+
+
 def connect():
     return mysql.connector.connect(
         host=os.getenv("DB_HOST"),
@@ -61,6 +68,7 @@ def find_post(conn, slug, title_hint):
         print(f"Candidates found ({len(rows)}):")
         for r in rows:
             print(f"  id={r['id']} status={r['status']} slug={r['slug']} title={r['title']!r}")
+        stage(f"abort-candidates-{len(rows)}")
         raise SystemExit(f"ABORT: expected exactly 1 matching post, found {len(rows)}")
     return rows[0]
 
@@ -115,9 +123,12 @@ def main():
     with open(args.body_file, encoding="utf-8") as fh:
         new_body = fh.read()
 
+    stage("start")
     conn = connect()
+    stage("connected")
     try:
         post = find_post(conn, args.slug, args.title_hint)
+        stage("found")
         print(f"Found post id={post['id']} status={post['status']} title={post['title']!r}")
 
         # 2. Backup
@@ -130,14 +141,18 @@ def main():
         # 3. Clean
         cleaned, problems = clean_content(new_body, post["title"])
         if problems:
+            stage("abort-body-problems")
             raise SystemExit(f"ABORT: body still has problems: {problems}")
         print(f"Body cleaned: {len(cleaned.split())} words, no problems")
+        stage("cleaned")
 
         # 4. Image
         used = used_image_urls(conn)
         img = find_image(post["title"], used)
         if not img:
+            stage("abort-no-image")
             raise SystemExit("ABORT: no licensed image found from Pexels, Unsplash or Pixabay")
+        stage("image-found")
         alt = "Healthy meal, movement, and wellness habits for 2026"
         print(f"Image selected from {img['source']}: {img['url']}")
 
@@ -164,6 +179,7 @@ def main():
         )
         conn.commit()
         cur.close()
+        stage("written")
         print(f"UPDATED post id={post['id']}: image_tracking id={image_id}, status unchanged ({post['status']})")
     except SystemExit:
         conn.rollback()
