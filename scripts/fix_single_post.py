@@ -269,7 +269,12 @@ def main():
     args = parser.parse_args()
 
     if args.verify_wp:
-        verify_live_wordpress(args.slug)
+        try:
+            verify_live_wordpress(args.slug)
+        except Exception as exc:
+            stage(f"verify-error-{type(exc).__name__}")
+            print(f"VERIFY ERROR: {type(exc).__name__}: {str(exc)[:300]}")
+            raise
         return
 
     with open(args.body_file, encoding="utf-8") as fh:
