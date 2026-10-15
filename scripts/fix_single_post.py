@@ -249,7 +249,10 @@ def verify_live_wordpress(slug):
         "xyz": "XYZ" in raw,
         "disc": "health disclaimer" in raw.lower(),
     }
-    summary = (f"verify-id{found['id']}-media{full.get('featured_media')}-"
+    rendered = full.get("content", {}).get("rendered", "") if isinstance(full.get("content"), dict) else ""
+    flags["rfig"] = "<figure" in rendered
+    flags["rfence"] = "```" in rendered
+    summary = (f"verify-id{found['id']}-media{full.get('featured_media')}-mod{str(full.get('modified',''))[:10].replace('-','')}-"
                + "-".join(f"{k}{int(v)}" for k, v in flags.items()))
     stage(summary)
     print(f"WordPress post id={found['id']} modified={full.get('modified')} featured_media={full.get('featured_media')}")
