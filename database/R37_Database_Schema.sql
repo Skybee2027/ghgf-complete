@@ -12,7 +12,7 @@
 CREATE TABLE IF NOT EXISTS retrofit_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
     blog_id INT NOT NULL,
-    status VARCHAR(50) DEFAULT 'pending', -- pending, in_progress, completed, failed
+    status VARCHAR(50) DEFAULT 'pending', -- pending, in_progress, completed, failed, rejected, dry_run
     started_at TIMESTAMP NULL,
     completed_at TIMESTAMP NULL,
     details JSON,  -- Stores detailed retrofit metadata
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS retrofit_log (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (blog_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_retrofit (blog_id, status)  -- One retrofit per post
+    INDEX idx_retrofit_blog_status (blog_id, status)  -- Allows multiple entries per post for retries
 );
 
 CREATE INDEX IF NOT EXISTS idx_retrofit_status ON retrofit_log(status);
@@ -148,7 +148,34 @@ CREATE INDEX IF NOT EXISTS idx_retrofit_errors_status ON retrofit_errors(status)
 CREATE INDEX IF NOT EXISTS idx_retrofit_errors_blog ON retrofit_errors(blog_id);
 
 -- ============================================================================
--- 8. INITIAL DATA & PROCEDURES
+-- 8. IMAGE TRACKING & MANAGEMENT
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS image_tracking (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    blog_id INT NOT NULL,
+    image_url VARCHAR(500),
+    image_title VARCHAR(255),
+    image_alt_text TEXT,
+    featured_image BOOLEAN DEFAULT FALSE,
+    source_type VARCHAR(50), -- pexels, unsplash, pixabay, custom_url, wordpress
+    source_id VARCHAR(100),
+    relevance_score FLOAT DEFAULT 0,
+    size_bytes INT,
+    upload_status VARCHAR(50) DEFAULT 'pending', -- pending, uploaded, failed
+    wordpress_attachment_id INT,
+    uploaded_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (blog_id) REFERENCES blog_posts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_image_blog ON image_tracking(blog_id);
+CREATE INDEX IF NOT EXISTS idx_image_featured ON image_tracking(featured_image);
+CREATE INDEX IF NOT EXISTS idx_image_status ON image_tracking(upload_status);
+
+-- ============================================================================
+-- 9. INITIAL DATA & PROCEDURES
 -- ============================================================================
 
 -- Enable only if using stored procedures for batch progress
@@ -192,7 +219,7 @@ END//
 DELIMITER ;
 
 -- ============================================================================
--- 9. INTEGRATION NOTES
+-- 10. INTEGRATION NOTES
 -- ============================================================================
 --
 -- This schema is designed to work alongside the existing 36-robot system:
