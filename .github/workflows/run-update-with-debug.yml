@@ -1,0 +1,204 @@
+name: Run Update with Debug Output
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-debug:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL }}
+      WORDPRESS_USER: ${{ secrets.WORDPRESS_USER }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: pip install requests mysql-connector-python --break-system-packages
+
+      - name: List Available Posts
+        run: |
+          python3 << 'PYTHON_EOF'
+          import mysql.connector
+          import os
+
+          conn = mysql.connector.connect(
+              host=os.getenv('DB_HOST'),
+              user=os.getenv('DB_USER'),
+              password=os.getenv('DB_PASSWORD'),
+              database=os.getenv('DB_NAME')
+          )
+          cursor = conn.cursor(dictionary=True)
+
+          print("\n" + "="*70)
+          print("ALL BLOG POSTS")
+          print("="*70)
+
+          cursor.execute("SELECT id, title, wordpress_post_id FROM blog_posts ORDER BY id DESC LIMIT 20")
+          posts = cursor.fetchall()
+
+          for i, post in enumerate(posts, 1):
+              wp_id = post['wordpress_post_id'] if post['wordpress_post_id'] else "NULL"
+              print(f"{i:2}. ID:{post['id']:4} WP_ID:{wp_id:6} {post['title'][:50]}")
+
+          cursor.close()
+          conn.close()
+          PYTHON_EOF
+
+      - name: Run Update Script with Debug
+        run: |
+          python3 << 'PYTHON_EOF'
+          import os
+          import sys
+          import requests
+          import mysql.connector
+          import json
+          import logging
+
+          logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+          logger = logging.getLogger(__name__)
+
+          print("\n" + "="*70)
+          print("RUNNING UPDATE WITH DEBUG OUTPUT")
+          print("="*70 + "\n")
+
+          try:
+              # Connect to database
+              print("[1] Connecting to database...")
+              conn = mysql.connector.connect(
+                  host=os.getenv('DB_HOST'),
+                  user=os.getenv('DB_USER'),
+                  password=os.getenv('DB_PASSWORD'),
+                  database=os.getenv('DB_NAME'),
+                  autocommit=True
+              )
+              print("✓ Database connected\n")
+
+              # Search for post - try multiple variations
+              cursor = conn.cursor(dictionary=True)
+
+              search_terms = [
+                  "Complete Guide to Health and Fitness Trends to Watch in 2026",
+                  "%Trends%",
+                  "%Health%Fitness%Trends%",
+                  "%2026"
+              ]
+
+              target_post = None
+              for term in search_terms:
+                  print(f"[2] Searching for: {term}")
+                  cursor.execute(
+                      "SELECT id, title, wordpress_post_id, content FROM blog_posts WHERE title LIKE %s LIMIT 1",
+                      (term,)
+                  )
+                  post = cursor.fetchone()
+
+                  if post:
+                      print(f"✓ Found post!")
+                      print(f"  Title: {post['title']}")
+                      print(f"  WordPress ID: {post['wordpress_post_id']}")
+                      print(f"  Content length: {len(post['content'])} chars\n")
+                      target_post = post
+                      break
+                  else:
+                      print(f"✗ No match\n")
+
+              if not target_post:
+                  print("❌ POST NOT FOUND - showing all posts with similar keywords:\n")
+                  cursor.execute("""
+                      SELECT id, title, wordpress_post_id
+                      FROM blog_posts
+                      WHERE title LIKE '%Health%' OR title LIKE '%Fitness%' OR title LIKE '%2026%'
+                      LIMIT 10
+                  """)
+                  similar = cursor.fetchall()
+                  for post in similar:
+                      print(f"  - {post['title'][:60]}")
+                  sys.exit(1)
+
+              wp_post_id = target_post['wordpress_post_id']
+              if not wp_post_id:
+                  print("❌ Post has no WordPress ID")
+                  sys.exit(1)
+
+              # Test WordPress connection
+              print("[3] Testing WordPress connection...")
+              auth = (os.getenv('WORDPRESS_USER'), os.getenv('WORDPRESS_PASSWORD'))
+              headers = {'Content-Type': 'application/json'}
+              wp_api = f"{os.getenv('WORDPRESS_URL')}/wp-json/wp/v2"
+
+              response = requests.get(
+                  f"{wp_api}/users/me",
+                  auth=auth,
+                  headers=headers,
+                  timeout=10
+              )
+
+              if response.status_code != 200:
+                  print(f"❌ WordPress auth failed: {response.status_code}")
+                  sys.exit(1)
+
+              print("✓ WordPress authenticated\n")
+
+              # Get current WordPress post
+              print(f"[4] Fetching WordPress post #{wp_post_id}...")
+              response = requests.get(
+                  f"{wp_api}/posts/{wp_post_id}",
+                  auth=auth,
+                  headers=headers,
+                  timeout=10
+              )
+
+              if response.status_code != 200:
+                  print(f"❌ Failed: {response.status_code}")
+                  print(response.text[:300])
+                  sys.exit(1)
+
+              wp_post = response.json()
+              print(f"✓ Current status: {wp_post.get('status')}")
+              print(f"  Current length: {len(wp_post.get('content', {}).get('rendered', ''))} chars\n")
+
+              # Update WordPress
+              print("[5] Updating WordPress post...")
+              payload = {
+                  'content': target_post['content']
+              }
+
+              response = requests.post(
+                  f"{wp_api}/posts/{wp_post_id}",
+                  auth=auth,
+                  headers=headers,
+                  json=payload,
+                  timeout=10
+              )
+
+              if response.status_code not in [200, 201]:
+                  print(f"❌ Update failed: {response.status_code}")
+                  print(response.text[:500])
+                  sys.exit(1)
+
+              print("✓ Update successful\n")
+
+              print("="*70)
+              print("✅ ALL STEPS COMPLETED SUCCESSFULLY")
+              print("="*70)
+
+          except Exception as e:
+              print(f"\n❌ ERROR: {e}")
+              import traceback
+              traceback.print_exc()
+              sys.exit(1)
+
+          PYTHON_EOF
