@@ -285,6 +285,15 @@ jobs:
           fi
         fi
 
+        if [ -f database/R0_Migration_R8_FeaturedImageAltText.sql ]; then
+          if mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/R0_Migration_R8_FeaturedImageAltText.sql 2>&1; then
+            echo "✓ Loaded R0_Migration_R8_FeaturedImageAltText.sql"
+          else
+            echo "❌ ERROR loading R0_Migration_R8_FeaturedImageAltText.sql"
+            exit 1
+          fi
+        fi
+
         echo "✅ Core schemas loaded successfully."
         echo "Database is now ready with all required tables and data for R2-R3-R31 pipeline."
         echo "Note: R37 and R14b schemas can be loaded later for monetization features."

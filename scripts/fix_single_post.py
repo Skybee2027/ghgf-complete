@@ -162,8 +162,9 @@ def main():
             print("DRY RUN: no database writes. Checks passed.")
             return
 
-        # 6. Write
+        # 6. Write (idempotent schema fix first: R8 needs this column)
         cur = conn.cursor()
+        cur.execute("ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS featured_image_alt_text TEXT")
         cur.execute(
             """INSERT INTO image_tracking (image_url, topic, used_date, blog_id, expires_date)
                VALUES (%s, %s, CURDATE(), %s, DATE_ADD(CURDATE(), INTERVAL 30 DAY))""",
