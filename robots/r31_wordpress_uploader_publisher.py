@@ -402,11 +402,20 @@ class WordPressUploaderPublisher:
                 print(f"  Publishing: {BLUE}{post['title'][:40]}...{RESET}")
 
                 # Get featured image if available
+                # HOLD posts without a featured image: never publish an image-less post.
+                # The post stays in draft so the next run can retry it once the image is fixed.
                 featured_image_id = None
                 if post['featured_image_id']:
                     image_url = self.get_featured_image_url(conn, post['featured_image_id'])
                     if image_url:
                         featured_image_id = self.upload_featured_image_to_wordpress(image_url)
+                        if not featured_image_id:  # one retry for transient download/upload failures
+                            featured_image_id = self.upload_featured_image_to_wordpress(image_url)
+
+                if not featured_image_id:
+                    print(f"    ✗ HELD: no featured image uploaded - post stays in draft")
+                    self.posts_failed += 1
+                    continue
 
                 # Get category ID
                 category_id = self.get_category_id(conn, post['topic'])

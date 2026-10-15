@@ -16,6 +16,12 @@ import json
 import requests
 import mysql.connector
 from datetime import datetime
+import os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from content_sanitizer import clean_content
+
+# Writes are OFF unless R37_APPLY=true. Older posts change only after explicit approval.
+APPLY_CHANGES = _os.getenv('R37_APPLY', 'false').lower() == 'true'
 
 # Configure logging
 logging.basicConfig(
@@ -382,21 +388,33 @@ GOAL: Transform this post into a 1500-2000 word HIGH-VALUE resource that:
                 else:
                     logger.info(f"  [{idx}/{len(posts)}] {post_title[:40]}... → Generating meta description")
 
-                # Save enhanced content, meta description, and mark ready for WordPress
-                cursor = self.connection.cursor()
-                cursor.execute("""
-                    UPDATE blog_posts
-                    SET content = %s, meta_description = %s, ready_for_wordpress = 1, final_qa_passed = 1, featured_image_id = COALESCE(featured_image_id, 1)
-                    WHERE id = %s
-                """, (enhanced if enhanced else post['content'], meta_description, post_id))
-                cursor.close()
+                # Sanitize the rewritten body. Anything still wrong blocks the write for this post.
+                new_content, problems = clean_content(enhanced if enhanced else post['content'], post_title)
 
-                # Record in retrofit log
                 cursor = self.connection.cursor()
-                cursor.execute("""
-                    INSERT INTO retrofit_log (blog_id, status, details, completed_at)
-                    VALUES (%s, %s, %s, NOW())
-                """, (post_id, 'completed', json.dumps({'enhanced': True, 'meta_description': meta_description})))
+                if problems:
+                    logger.info(f"      ✗ REJECTED (not written): {problems}")
+                    cursor.execute("""
+                        INSERT INTO retrofit_log (blog_id, status, details, completed_at)
+                        VALUES (%s, %s, %s, NOW())
+                    """, (post_id, 'rejected', json.dumps({'problems': problems})))
+                elif not APPLY_CHANGES:
+                    # Default: nothing is written to blog posts until R37_APPLY=true is set
+                    logger.info(f"      → DRY RUN (R37_APPLY not set): nothing written")
+                    cursor.execute("""
+                        INSERT INTO retrofit_log (blog_id, status, details, completed_at)
+                        VALUES (%s, %s, %s, NOW())
+                    """, (post_id, 'dry_run', json.dumps({'meta_description': meta_description})))
+                else:
+                    # Update only the body and meta description. Publish flags and the
+                    # featured image are not touched here.
+                    cursor.execute("""
+                        UPDATE blog_posts SET content = %s, meta_description = %s WHERE id = %s
+                    """, (new_content, meta_description, post_id))
+                    cursor.execute("""
+                        INSERT INTO retrofit_log (blog_id, status, details, completed_at)
+                        VALUES (%s, %s, %s, NOW())
+                    """, (post_id, 'completed', json.dumps({'enhanced': True, 'meta_description': meta_description})))
                 cursor.close()
 
                 self.posts_processed += 1

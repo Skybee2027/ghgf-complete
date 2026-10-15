@@ -39,6 +39,9 @@ jobs:
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY || '' }}
       UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY || '' }}
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY || '' }}
+      WORDPRESS_URL: ${{ secrets.WORDPRESS_URL || 'https://greathealthgreatfitness.com' }}
+      WORDPRESS_USER: ${{ secrets.WORDPRESS_USER || 'api_user' }}
+      WORDPRESS_PASSWORD: ${{ secrets.WORDPRESS_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 

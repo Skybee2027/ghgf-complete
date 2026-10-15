@@ -111,6 +111,59 @@ def insert_image(body, img, alt):
     return body[:end] + "\n" + figure + body[end:]
 
 
+def update_live_wordpress_post(slug, final_body, img, alt):
+    """
+    Update the one existing WordPress post for this slug: upload the featured image,
+    replace the content, set the featured media, and verify. Status and title are unchanged.
+    Raises SystemExit on any mismatch so the database is not written.
+    """
+    import requests
+    from r31_wordpress_uploader_publisher import WordPressUploaderPublisher
+
+    uploader = WordPressUploaderPublisher()
+    auth = (uploader.wp_user, uploader.wp_password)
+    if not uploader.wp_password:
+        raise SystemExit("ABORT: WORDPRESS_PASSWORD is not set")
+    api = uploader.wp_api_base
+
+    # Find the single live post for this slug
+    r = requests.get(f"{api}/posts", params={"slug": slug, "status": "any"}, auth=auth, timeout=30)
+    r.raise_for_status()
+    matches = r.json()
+    if len(matches) != 1:
+        stage(f"abort-wp-matches-{len(matches)}")
+        raise SystemExit(f"ABORT: expected 1 WordPress post for slug '{slug}', found {len(matches)}")
+    wp_id = matches[0]["id"]
+    print(f"WordPress post id={wp_id} status={matches[0]['status']}")
+
+    # Upload the featured image (one retry for transient failures)
+    media_id = uploader.upload_featured_image_to_wordpress(img["url"]) or \
+        uploader.upload_featured_image_to_wordpress(img["url"])
+    if not media_id:
+        stage("abort-wp-media")
+        raise SystemExit("ABORT: featured image could not be uploaded to WordPress")
+
+    # Update content and featured image
+    r = requests.post(
+        f"{api}/posts/{wp_id}",
+        json={"content": final_body, "featured_media": media_id},
+        auth=auth,
+        timeout=60,
+    )
+    if r.status_code not in (200, 201):
+        stage(f"abort-wp-update-{r.status_code}")
+        raise SystemExit(f"ABORT: WordPress update failed with HTTP {r.status_code}")
+
+    # Verify by reading back
+    check = requests.get(f"{api}/posts/{wp_id}", params={"context": "edit"}, auth=auth, timeout=30).json()
+    if check.get("featured_media") != media_id:
+        raise SystemExit("ABORT: featured image did not save on WordPress")
+    if "```" in check["content"]["raw"] or "<figure" not in check["content"]["raw"]:
+        raise SystemExit("ABORT: WordPress content failed verification")
+    print(f"VERIFIED WordPress post {wp_id}: featured_media={media_id}, content updated")
+    return media_id
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--slug", required=True)
@@ -159,10 +212,14 @@ def main():
         final_body = insert_image(cleaned, img, alt)
 
         if args.dry_run:
-            print("DRY RUN: no database writes. Checks passed.")
+            print("DRY RUN: no WordPress or database writes. Checks passed.")
             return
 
-        # 6. Write (idempotent schema fix first: R8 needs this column)
+        # 6a. WordPress first: if this fails, nothing is written to the database.
+        wp_media_id = update_live_wordpress_post(post["slug"], final_body, img, alt)
+        stage("wordpress-updated")
+
+        # 6b. Database (idempotent schema fix first: R8 needs this column)
         cur = conn.cursor()
         cur.execute("ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS featured_image_alt_text TEXT")
         cur.execute(
